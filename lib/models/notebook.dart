@@ -172,25 +172,29 @@ class NotePage {
   /// A free spot for a new block: the first gap down the page that fits,
   /// or a little cascade from the top if the page is full.
   void placeNew(Block block) {
-    const left = 48.0;
-    var y = 96.0;
+    final h = block.estimatedHeight;
     final sorted = blocks.where((b) => b.isPlaced).toList()..sort((a, b) => a.y!.compareTo(b.y!));
-    for (final b in sorted) {
-      final overlapsX = b.x! < left + block.width && b.x! + b.width > left;
-      if (overlapsX && b.y! < y + block.estimatedHeight && b.y! + b.estimatedHeight > y) {
-        y = b.y! + b.estimatedHeight + 16;
+    // The first free spot down the left side, then down the right side.
+    for (final left in {48.0, max(48.0, pageWidth - block.width - 24)}) {
+      var y = 96.0;
+      for (final b in sorted) {
+        final overlapsX = b.x! < left + block.width && b.x! + b.width > left;
+        if (overlapsX && b.y! < y + h && b.y! + b.estimatedHeight > y) {
+          y = b.y! + b.estimatedHeight + 16;
+        }
+      }
+      if (y + h <= pageHeight - 30) {
+        block
+          ..x = left
+          ..y = y;
+        return;
       }
     }
-    if (y + 40 > pageHeight) {
-      final n = blocks.length % 6;
-      block
-        ..x = 60.0 + n * 18
-        ..y = 110.0 + n * 18;
-    } else {
-      block
-        ..x = left
-        ..y = y;
-    }
+    // A full page: put it on top, still all on the paper.
+    final n = blocks.length % 6;
+    block
+      ..x = 60.0 + n * 18
+      ..y = max(80.0, min(110.0 + n * 18, pageHeight - h - 30));
   }
 
   /// All the words on the page, for search.
@@ -228,6 +232,7 @@ sealed class Block {
         ChecklistBlock(:final items) => 30.0 * items.length,
         SheetBlock(:final rows, :final naturalWidth) => (rows + 2) * 24 * width / naturalWidth,
         CalculatorBlock() => 330 * width / CalculatorBlock.naturalWidth,
+        MediaBlock(:final aspect, :final todos) => (width - 16) / aspect + 70 + 30.0 * todos.items.length,
       };
   set width(double w) => _width = w;
   bool get isPlaced => x != null && y != null;
@@ -256,6 +261,7 @@ sealed class Block {
       'checklist' => ChecklistBlock.fromJson(j),
       'sheet' => SheetBlock.fromJson(j),
       'calculator' => CalculatorBlock.fromJson(j),
+      'media' => MediaBlock.fromJson(j),
       _ => TextBlock(text: ''),
     };
     return b..readLayout(j);
@@ -458,6 +464,84 @@ class CalculatorBlock extends Block {
   String get searchableText => display;
 }
 
+enum MediaKind { photo, video }
+
+/// A photo or video in a small frame, with a note about it, where it was,
+/// and things to do about it. The file itself is kept on the device by
+/// [mediaId], outside the notebook's text so the notebook stays light.
+class MediaBlock extends Block {
+  MediaBlock({
+    super.id,
+    super.x,
+    super.y,
+    super.width,
+    super.angle,
+    required this.mediaId,
+    this.kind = MediaKind.photo,
+    this.aspect = 4 / 3,
+    this.name = '',
+    this.note = '',
+    this.place = '',
+    ChecklistBlock? todos,
+  }) : todos = todos ?? ChecklistBlock(items: []);
+
+  /// Media ids starting with this are drawn pictures used in previews.
+  static const samplePrefix = 'sample:';
+
+  final String mediaId;
+  final MediaKind kind;
+
+  /// Width divided by height of the photo or video.
+  double aspect;
+  final String name;
+  String note;
+  String place;
+
+  /// To-dos about this photo or video.
+  final ChecklistBlock todos;
+
+  bool get isSample => mediaId.startsWith(samplePrefix);
+
+  @override
+  double get defaultWidth => 220;
+
+  @override
+  double get minWidth => 140;
+
+  @override
+  Map<String, dynamic> toJson() => {
+        ...layoutJson(),
+        'type': 'media',
+        'id': id,
+        'media': mediaId,
+        'kind': kind.name,
+        'aspect': aspect,
+        if (name.isNotEmpty) 'name': name,
+        if (note.isNotEmpty) 'note': note,
+        if (place.isNotEmpty) 'place': place,
+        if (todos.items.isNotEmpty) 'todos': todos.items.map((i) => i.toJson()).toList(),
+      };
+
+  factory MediaBlock.fromJson(Map<String, dynamic> j) => MediaBlock(
+        id: j['id'] as String,
+        mediaId: j['media'] as String,
+        kind: MediaKind.values.asNameMap()[j['kind']] ?? MediaKind.photo,
+        aspect: (j['aspect'] as num?)?.toDouble() ?? 4 / 3,
+        name: j['name'] as String? ?? '',
+        note: j['note'] as String? ?? '',
+        place: j['place'] as String? ?? '',
+        todos: ChecklistBlock(
+          items: [
+            for (final i in (j['todos'] as List? ?? const []))
+              ChecklistItem.fromJson(i as Map<String, dynamic>),
+          ],
+        ),
+      );
+
+  @override
+  String get searchableText => [name, note, place, todos.searchableText].join('\n');
+}
+
 /// A page that was torn out. It can be put back for [ArchivedPage.keepFor].
 class ArchivedPage {
   ArchivedPage({
@@ -510,6 +594,13 @@ class Notebook {
 
   /// Torn-out pages, newest first.
   final List<ArchivedPage> archive;
+
+  /// Every photo and video still used, including on torn-out pages.
+  Set<String> get mediaIds => {
+        for (final page in [...sections.expand((s) => s.pages), ...archive.map((a) => a.page)])
+          for (final b in page.blocks)
+            if (b is MediaBlock) b.mediaId,
+      };
 
   Map<String, dynamic> toJson() => {
         'version': 2,

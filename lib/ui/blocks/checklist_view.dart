@@ -6,9 +6,10 @@ import '../store_scope.dart';
 import '../theme.dart';
 
 class ChecklistView extends StatefulWidget {
-  const ChecklistView({super.key, required this.block});
+  const ChecklistView({super.key, required this.block, this.fontSize = 19});
 
   final ChecklistBlock block;
+  final double fontSize;
 
   @override
   State<ChecklistView> createState() => _ChecklistViewState();
@@ -91,12 +92,13 @@ class _ChecklistViewState extends State<ChecklistView> {
                   controller: _controllerFor(item),
                   focusNode: _focusFor(item),
                   style: handwriting.copyWith(
+                    fontSize: widget.fontSize,
                     color: item.done ? Pen.blue.withValues(alpha: 0.75) : Pen.blue,
                   ),
                   textInputAction: TextInputAction.next,
                   decoration: InputDecoration.collapsed(
                     hintText: 'To do…',
-                    hintStyle: handwriting.copyWith(color: Pen.pencil.withValues(alpha: 0.45)),
+                    hintStyle: handwriting.copyWith(fontSize: widget.fontSize, color: Pen.pencil.withValues(alpha: 0.45)),
                   ),
                   onChanged: (text) {
                     item.text = text;

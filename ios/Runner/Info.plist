@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Put photos and videos on your notebook pages.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Take a photo or video for your notebook.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Record sound with videos for your notebook.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

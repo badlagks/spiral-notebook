@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/notebook.dart';
 import 'calculator_view.dart';
 import 'checklist_view.dart';
+import 'media_view.dart';
 import 'sheet_view.dart';
 import 'sticky_view.dart';
 import 'text_block_view.dart';
@@ -15,6 +16,7 @@ Widget blockContent(Block block, {bool autofocus = false}) => switch (block) {
       ChecklistBlock() => ChecklistView(block: block),
       SheetBlock() => _Scaled(width: block.width, child: SheetView(block: block)),
       CalculatorBlock() => _Scaled(width: block.width, child: CalculatorView(block: block)),
+      MediaBlock() => MediaView(key: ValueKey(block.id), block: block),
     };
 
 class _Scaled extends StatelessWidget {

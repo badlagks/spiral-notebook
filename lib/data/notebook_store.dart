@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/notebook.dart';
+import 'media/media_store.dart';
 import 'sample_notebook.dart';
 
 enum SaveState { saved, saving, failed }
@@ -42,6 +43,13 @@ class NotebookStore extends ChangeNotifier {
     }
     final store = NotebookStore._(nb ?? sampleNotebook(), prefs);
     store.purgeArchive(DateTime.now());
+    // Photos and videos from erased widgets or long-gone pages. Only once
+    // the notebook loaded, so a damaged save never costs anyone their photos.
+    if (nb != null) {
+      unawaited(mediaStore.removeAllExcept(store.notebook.mediaIds).catchError((Object e) {
+        debugPrint('Could not tidy media: $e');
+      }));
+    }
     return store;
   }
 
