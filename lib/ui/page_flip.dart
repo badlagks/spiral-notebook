@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -32,6 +33,10 @@ class FlipController extends ChangeNotifier {
 /// The open book, in paper units: two pages and the coil when [spread] is
 /// true, otherwise one page with the coil down its left edge. Grab a page by
 /// its outer edge (finger or mouse) and drag to turn it, or tap that edge.
+///
+/// A turning page curls like paper: its corner follows your finger, it
+/// folds along a slanted line, and its back side rolls over with a soft
+/// shadow, showing the page underneath.
 class FlippingBook extends StatefulWidget {
   const FlippingBook({super.key, required this.spread, required this.controller, required this.buildPage});
 
@@ -44,15 +49,29 @@ class FlippingBook extends StatefulWidget {
 }
 
 class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderStateMixin {
-  late final _anim = AnimationController(vsync: this, duration: const Duration(milliseconds: 420));
-  int _dir = 0; // +1 forward, -1 back, 0 at rest
-  double _dragStartX = 0;
+  late final _anim = AnimationController(vsync: this);
+
+  // Every turn is drawn as a forward turn of the spread (or page) at [_base]:
+  // its outer corner travels from [_rest] (lying flat) to [_turned] (turned
+  // over). Turning back is the same picture played in reverse.
+  int? _base;
+  Offset _corner = Offset.zero;
+  double _cornerY = pageHeight;
+
+  // The animation in flight: from, to, and how far the corner lifts on the way.
+  Offset _from = Offset.zero, _to = Offset.zero;
+  double _lift = 0;
+  Curve _curve = Curves.easeInOut;
+
+  // A drag in progress.
+  int _dragDir = 0;
+  Offset _dragStart = Offset.zero, _cornerAtStart = Offset.zero;
 
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_onRequest);
-    _anim.addListener(() => setState(() {}));
+    _anim.addListener(_tick);
   }
 
   @override
@@ -72,59 +91,107 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
   }
 
   int get _step => widget.spread ? 2 : 1;
-  double get _travel => widget.spread ? pageWidth * 1.6 : pageWidth;
+  bool get _busy => _base != null;
+
+  /// The line the sheet turns around: the middle of the coil.
+  double get _hingeX => widget.spread ? pageWidth + spineWidth / 2 : 0;
+
+  /// How far the sheet's outer edge is from the hinge.
+  double get _reach => widget.spread ? pageWidth + spineWidth / 2 : pageWidth;
+
+  Offset get _rest => Offset(_hingeX + _reach, _cornerY);
+  Offset get _turned => Offset(_hingeX - _reach, _cornerY);
+
+  /// Where the turning sheet lies when flat.
+  Rect get _sheet => widget.spread
+      ? const Rect.fromLTWH(pageWidth + spineWidth, 0, pageWidth, pageHeight)
+      : const Rect.fromLTWH(0, 0, pageWidth, pageHeight);
+
+  /// How far over the sheet is, from 0 (flat) to 1 (turned).
+  double get _progress => ((_rest.dx - _corner.dx) / (2 * _reach)).clamp(0.0, 1.0);
 
   /// The page shown on the left of a spread (or the only page).
   int _first(int pageIndex) => widget.spread ? pageIndex - pageIndex % 2 : pageIndex;
 
-  bool _canTurn(int dir) {
+  bool _canTurn(int dir) => dir > 0 || _first(StoreScope.read(context).pageIndex) > 0;
+
+  /// Paper stays fixed to the coil, so the corner can't be pulled further
+  /// from it than the sheet is wide (or, diagonally, than it is long).
+  Offset _attached(Offset p) {
+    Offset keep(Offset p, Offset pin, double r) {
+      final d = p - pin;
+      return d.distance <= r ? p : pin + d / d.distance * r;
+    }
+
+    final near = Offset(_hingeX, _cornerY);
+    final far = Offset(_hingeX, pageHeight - _cornerY);
+    p = keep(p, near, _reach);
+    return keep(p, far, math.sqrt(_reach * _reach + pageHeight * pageHeight));
+  }
+
+  void _begin(int dir, {required double cornerY}) {
+    FocusScope.of(context).unfocus();
+    final first = _first(StoreScope.read(context).pageIndex);
+    _cornerY = cornerY;
+    _base = dir > 0 ? first : first - _step;
+    _corner = dir > 0 ? _rest : _turned;
+  }
+
+  void _tick() {
+    final a = _curve.transform(_anim.value);
+    final lift = _lift * math.sin(a * math.pi) * (_cornerY == 0 ? 1 : -1);
+    setState(() => _corner = _attached(Offset.lerp(_from, _to, a)! + Offset(0, lift)));
+  }
+
+  Future<void> _animateTo(Offset target, {double lift = 0, int ms = 520, Curve curve = Curves.easeInOut}) async {
+    _from = _corner;
+    _to = target;
+    _lift = lift;
+    _curve = curve;
+    _anim.duration = Duration(milliseconds: ms);
+    await _anim.forward(from: 0);
+    if (!mounted) return;
     final store = StoreScope.read(context);
-    return dir > 0 || _first(store.pageIndex) > 0;
+    final shownFirst = target == _turned ? _base! + _step : _base!;
+    final delta = shownFirst - _first(store.pageIndex);
+    setState(() => _base = null);
+    if (delta != 0) store.turnPage(delta);
   }
 
   void _onRequest() => _turn(widget.controller.request);
 
   Future<void> _turn(int dir) async {
-    if (_dir != 0 || !_canTurn(dir)) return;
-    FocusScope.of(context).unfocus();
-    setState(() => _dir = dir);
-    await _anim.forward(from: _anim.value);
-    _finish();
+    if (_busy || !_canTurn(dir)) return;
+    setState(() => _begin(dir, cornerY: pageHeight));
+    await _animateTo(dir > 0 ? _turned : _rest, lift: pageHeight * 0.22, ms: 760);
   }
 
-  void _finish() {
-    final store = StoreScope.read(context);
-    final dir = _dir;
+  void _onDragStart(int dir, DragStartDetails d) {
+    if (_busy || !_canTurn(dir)) return;
     setState(() {
-      _dir = 0;
-      _anim.value = 0;
+      _begin(dir, cornerY: d.localPosition.dy < pageHeight / 2 ? 0 : pageHeight);
+      _dragDir = dir;
+      _dragStart = d.localPosition;
+      _cornerAtStart = _corner;
     });
-    if (dir != 0) store.turnPage(dir * _step);
   }
 
-  void _dragStart(int dir, DragStartDetails d) {
-    if (_dir != 0 || !_canTurn(dir)) return;
-    FocusScope.of(context).unfocus();
-    _dragStartX = d.localPosition.dx;
-    setState(() => _dir = dir);
+  void _onDragUpdate(int dir, DragUpdateDetails d) {
+    if (_dragDir != dir) return;
+    final moved = d.localPosition - _dragStart;
+    // One page on a phone is narrow, so the corner runs ahead of the finger.
+    final k = widget.spread ? 1.0 : 2.0;
+    setState(() => _corner = _attached(_cornerAtStart + Offset(moved.dx * k, moved.dy)));
   }
 
-  void _dragUpdate(int dir, DragUpdateDetails d) {
-    if (_dir != dir) return;
-    final moved = (d.localPosition.dx - _dragStartX) * -dir;
-    _anim.value = (moved / _travel).clamp(0.0, 1.0);
-  }
-
-  Future<void> _dragEnd(int dir, DragEndDetails d) async {
-    if (_dir != dir) return;
+  Future<void> _onDragEnd(int dir, DragEndDetails d) async {
+    if (_dragDir != dir) return;
+    _dragDir = 0;
     final fling = -dir * d.velocity.pixelsPerSecond.dx;
-    if (_anim.value > 0.25 || fling > 600) {
-      await _anim.forward();
-      _finish();
-    } else {
-      await _anim.reverse();
-      setState(() => _dir = 0);
-    }
+    final turnedBy = dir > 0 ? _progress : 1 - _progress;
+    final complete = turnedBy > 0.25 || fling > 600;
+    final toTurned = complete == dir > 0;
+    await _animateTo(toTurned ? _turned : _rest, ms: 360, curve: Curves.easeOut);
   }
 
   @override
@@ -134,35 +201,34 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
     return widget.spread ? _spread(first) : _single(first);
   }
 
-  Widget _page(int index, {required bool left, bool interactive = true}) =>
-      SizedBox(
+  Widget _page(int index, {required bool left}) => SizedBox(
         width: pageWidth,
         height: pageHeight,
-        child: widget.buildPage(index, bindingOnLeft: !left, interactive: interactive && _dir == 0),
+        child: widget.buildPage(index, bindingOnLeft: !left, interactive: !_busy),
       );
 
   // ----- Two pages side by side -----
 
   Widget _spread(int l) {
-    final t = _anim.value;
-    Widget leftPage, rightPage;
-    Widget? leaf;
-    switch (_dir) {
-      case 1:
-        leftPage = _page(l, left: true);
-        rightPage = _page(l + 3, left: false);
-        leaf = t < 0.5
-            ? _leaf(_page(l + 1, left: false), angle: -t * math.pi, hinge: Alignment.centerLeft, x: pageWidth + spineWidth, shade: t)
-            : _leaf(_page(l + 2, left: true), angle: (1 - t) * math.pi, hinge: Alignment.centerRight, x: 0, shade: 1 - t);
-      case -1:
-        leftPage = _page(l - 2, left: true);
-        rightPage = _page(l + 1, left: false);
-        leaf = t < 0.5
-            ? _leaf(_page(l, left: true), angle: t * math.pi, hinge: Alignment.centerRight, x: 0, shade: t)
-            : _leaf(_page(l - 1, left: false), angle: -(1 - t) * math.pi, hinge: Alignment.centerLeft, x: pageWidth + spineWidth, shade: 1 - t);
-      default:
-        leftPage = _page(l, left: true);
-        rightPage = _page(l + 1, left: false);
+    final b = _base;
+    final List<Widget> layers;
+    if (b == null) {
+      layers = [
+        Positioned(left: 0, top: 0, child: _page(l, left: true)),
+        Positioned(left: pageWidth + spineWidth, top: 0, child: _page(l + 1, left: false)),
+        _spine(),
+      ];
+    } else {
+      layers = [
+        Positioned(left: 0, top: 0, child: _page(b, left: true)),
+        Positioned(left: pageWidth + spineWidth, top: 0, child: _page(b + 3, left: false)),
+        _spine(),
+        ..._curl(
+          front: _page(b + 1, left: false),
+          back: _page(b + 2, left: true),
+          backLeft: 0,
+        ),
+      ];
     }
     return SizedBox(
       width: pageWidth * 2 + spineWidth,
@@ -170,19 +236,9 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Positioned(key: const ValueKey('left'), left: 0, top: 0, child: leftPage),
-          Positioned(key: const ValueKey('right'), left: pageWidth + spineWidth, top: 0, child: rightPage),
-          const Positioned(
-            key: ValueKey('spine'),
-            left: pageWidth,
-            top: 0,
-            width: spineWidth,
-            height: pageHeight,
-            child: ColoredBox(color: Color(0xFFE9DFC8), child: CustomPaint(painter: SpiralPainter())),
-          ),
-          ?leaf,
+          Positioned.fill(key: const ValueKey('pages'), child: Stack(clipBehavior: Clip.none, children: layers)),
           // Grab strips on the outer edges, with a turned-up corner as a hint.
-          // Keyed so a drag in progress survives the leaf being added above.
+          // Keyed so a drag in progress survives the pages changing underneath.
           Positioned(key: const ValueKey('grab-back'), left: 0, top: 0, bottom: 0, width: _grabStrip, child: _grab(-1, cornerOnLeft: true)),
           Positioned(key: const ValueKey('grab-next'), right: 0, top: 0, bottom: 0, width: _grabStrip, child: _grab(1, cornerOnLeft: false)),
         ],
@@ -190,21 +246,36 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
     );
   }
 
+  Widget _spine() => const Positioned(
+        left: pageWidth,
+        top: 0,
+        width: spineWidth,
+        height: pageHeight,
+        child: ColoredBox(color: Color(0xFFE9DFC8), child: CustomPaint(painter: SpiralPainter())),
+      );
+
   // ----- One page, coil on the left -----
 
   Widget _single(int p) {
-    final t = _anim.value;
-    Widget base;
-    Widget? leaf;
-    switch (_dir) {
-      case 1:
-        base = _page(p + 1, left: false);
-        leaf = _leaf(_page(p, left: false), angle: -t * math.pi / 2, hinge: Alignment.centerLeft, x: 0, shade: t);
-      case -1:
-        base = _page(p, left: false);
-        leaf = _leaf(_page(p - 1, left: false), angle: -(1 - t) * math.pi / 2, hinge: Alignment.centerLeft, x: 0, shade: 1 - t);
-      default:
-        base = _page(p, left: false);
+    final b = _base;
+    final List<Widget> layers;
+    if (b == null) {
+      layers = [Positioned.fill(child: _page(p, left: false))];
+    } else {
+      layers = [
+        Positioned.fill(child: _page(b + 1, left: false)),
+        // The back of a sheet in a one-page notebook is plain paper.
+        ..._curl(
+          front: _page(b, left: false),
+          back: SizedBox(
+            width: pageWidth,
+            height: pageHeight,
+            child: CustomPaint(painter: PaperPainter(style: PaperStyle.blank, bindingOnLeft: false)),
+          ),
+          backLeft: 0,
+          backIsMirror: true,
+        ),
+      ];
     }
     return SizedBox(
       width: pageWidth,
@@ -212,8 +283,8 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Positioned.fill(key: const ValueKey('base'), child: base),
-          ?leaf,
+          // The page rolls away over the coil and out of sight.
+          Positioned.fill(key: const ValueKey('pages'), child: ClipRect(child: Stack(children: layers))),
           const Positioned(
             key: ValueKey('spine'),
             left: -8,
@@ -236,45 +307,59 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
     );
   }
 
-  /// A page caught mid-turn, swinging around its [hinge] edge.
-  Widget _leaf(Widget page, {required double angle, required Alignment hinge, required double x, required double shade}) {
-    return Positioned(
-      key: const ValueKey('leaf'),
-      left: x,
-      top: 0,
-      child: Transform(
-        alignment: hinge,
-        transform: Matrix4.identity()
-          ..setEntry(3, 2, 0.0011)
-          ..rotateY(angle),
-        child: Stack(
-          children: [
-            page,
-            Positioned.fill(
-              child: IgnorePointer(
-                child: ColoredBox(color: Colors.black.withValues(alpha: 0.28 * math.sin(shade * math.pi / 2))),
+  /// The turning sheet: the part still lying flat, the part folded over
+  /// (showing [back]), and the shadows that make it look curled.
+  ///
+  /// [back] is laid out where it lies once the sheet is turned, at [backLeft].
+  /// With [backIsMirror] it is the sheet's own reverse side instead.
+  List<Widget> _curl({required Widget front, required Widget back, required double backLeft, bool backIsMirror = false}) {
+    final fold = _Fold(rest: _rest, corner: _corner, sheet: _sheet);
+    final sheet = Positioned(left: _sheet.left, top: 0, child: front);
+    if (fold.flat) return [sheet];
+
+    // Reflecting across the fold, after reflecting across the coil, carries
+    // the next page from where it will lie to where it is now.
+    final mirror = fold.reflection;
+    final toNow = backIsMirror
+        ? (mirror..translateByDouble(_sheet.left - backLeft, 0, 0, 1))
+        : (mirror
+          ..translateByDouble(2 * _hingeX, 0, 0, 1)
+          ..scaleByDouble(-1, 1, 1, 1));
+    return [
+      Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _UnderShadowPainter(fold)))),
+      Positioned.fill(child: ClipPath(clipper: _PolygonClipper(fold.flatPart), child: Stack(children: [sheet]))),
+      Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _DropShadowPainter(fold)))),
+      Positioned.fill(
+        child: IgnorePointer(
+          child: ClipPath(
+            clipper: _PolygonClipper(fold.foldedPart),
+            child: Transform(
+              transform: toNow,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned(left: backLeft, top: 0, child: back),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
-    );
+      Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _RollPainter(fold)))),
+    ];
   }
 
   Widget _grab(int dir, {required bool cornerOnLeft, bool showCorner = true}) {
+    final corner = showCorner && !_busy
+        ? GestureDetector(
+            onTap: () => _turn(dir),
+            child: CustomPaint(size: const Size(30, 30), painter: _CornerPainter(onLeft: cornerOnLeft)),
+          )
+        : null;
+    final align = cornerOnLeft ? Alignment.bottomLeft : Alignment.bottomRight;
     // While drawing, the page edges are for ink; the corner still turns pages.
-    if (InkScope.of(context).drawing) {
-      return Align(
-        alignment: cornerOnLeft ? Alignment.bottomLeft : Alignment.bottomRight,
-        child: showCorner && _dir == 0
-            ? GestureDetector(
-                onTap: () => _turn(dir),
-                child: CustomPaint(size: const Size(30, 30), painter: _CornerPainter(onLeft: cornerOnLeft)),
-              )
-            : null,
-      );
-    }
-    final enabled = _dir == 0 || _dir == dir;
+    if (InkScope.of(context).drawing) return Align(alignment: align, child: corner);
+    final enabled = !_busy || _dragDir == dir;
     return Semantics(
       button: true,
       label: dir > 0 ? 'Turn to the next page' : 'Turn back a page',
@@ -283,23 +368,168 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
         cursor: enabled ? SystemMouseCursors.grab : MouseCursor.defer,
         child: GestureDetector(
           behavior: HitTestBehavior.translucent,
-          onHorizontalDragStart: (d) => _dragStart(dir, d),
-          onHorizontalDragUpdate: (d) => _dragUpdate(dir, d),
-          onHorizontalDragEnd: (d) => _dragEnd(dir, d),
-          child: Align(
-            alignment: cornerOnLeft ? Alignment.bottomLeft : Alignment.bottomRight,
-            // Tapping the turned-up corner turns the page too.
-            child: showCorner && _dir == 0
-                ? GestureDetector(
-                    onTap: () => _turn(dir),
-                    child: CustomPaint(size: const Size(30, 30), painter: _CornerPainter(onLeft: cornerOnLeft)),
-                  )
-                : null,
-          ),
+          onHorizontalDragStart: (d) => _onDragStart(dir, d),
+          onHorizontalDragUpdate: (d) => _onDragUpdate(dir, d),
+          onHorizontalDragEnd: (d) => _onDragEnd(dir, d),
+          // Tapping the turned-up corner turns the page too.
+          child: Align(alignment: align, child: corner),
         ),
       ),
     );
   }
+}
+
+/// Where a sheet folds when its corner is lifted from [rest] to [corner]:
+/// along the line halfway between them, at right angles to the pull.
+class _Fold {
+  _Fold({required this.rest, required this.corner, required this.sheet}) {
+    final pull = corner - rest;
+    flat = pull.distance < 0.5;
+    normal = flat ? const Offset(-1, 0) : pull / pull.distance;
+    mid = (rest + corner) / 2;
+    final outline = [sheet.topLeft, sheet.topRight, sheet.bottomRight, sheet.bottomLeft];
+    flatPart = flat ? outline : _cut(outline, keepAhead: true);
+    foldedPart = flat ? const [] : [for (final p in _cut(outline, keepAhead: false)) reflect(p)];
+  }
+
+  final Offset rest, corner;
+  final Rect sheet;
+  late final bool flat;
+  late final Offset normal, mid;
+
+  /// The part of the sheet still lying flat, on the coil's side of the fold.
+  late final List<Offset> flatPart;
+
+  /// The lifted part, where it is now: folded over on top.
+  late final List<Offset> foldedPart;
+
+  /// How far over the fold the corner has gone.
+  double get depth => (corner - rest).distance / 2;
+
+  double side(Offset p) => (p.dx - mid.dx) * normal.dx + (p.dy - mid.dy) * normal.dy;
+
+  Offset reflect(Offset p) => p - normal * (2 * side(p));
+
+  Matrix4 get reflection {
+    final (nx, ny) = (normal.dx, normal.dy);
+    final k = 2 * (mid.dx * nx + mid.dy * ny);
+    return Matrix4(
+      1 - 2 * nx * nx, -2 * nx * ny, 0, 0, //
+      -2 * nx * ny, 1 - 2 * ny * ny, 0, 0,
+      0, 0, 1, 0,
+      k * nx, k * ny, 0, 1,
+    );
+  }
+
+  /// Cuts a convex outline along the fold, keeping one side.
+  List<Offset> _cut(List<Offset> poly, {required bool keepAhead}) {
+    bool inside(Offset p) => keepAhead ? side(p) >= 0 : side(p) < 0;
+    final out = <Offset>[];
+    for (var i = 0; i < poly.length; i++) {
+      final a = poly[i], b = poly[(i + 1) % poly.length];
+      if (inside(a)) out.add(a);
+      if (inside(a) != inside(b)) {
+        final t = side(a) / (side(a) - side(b));
+        out.add(Offset.lerp(a, b, t)!);
+      }
+    }
+    return out;
+  }
+
+  Path pathOf(List<Offset> pts) => pts.isEmpty ? Path() : (Path()..addPolygon(pts, true));
+}
+
+class _PolygonClipper extends CustomClipper<Path> {
+  _PolygonClipper(this.points);
+  final List<Offset> points;
+
+  @override
+  Path getClip(Size size) => points.isEmpty ? Path() : (Path()..addPolygon(points, true));
+
+  @override
+  bool shouldReclip(_PolygonClipper old) => true;
+}
+
+/// The shadow the lifted paper casts on the page underneath, next to the fold.
+class _UnderShadowPainter extends CustomPainter {
+  _UnderShadowPainter(this.fold);
+  final _Fold fold;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final reach = math.min(46.0, fold.depth * 0.6 + 6);
+    canvas.save();
+    canvas.clipRect(fold.sheet);
+    canvas.drawRect(
+      fold.sheet,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          fold.mid,
+          fold.mid - fold.normal * reach,
+          [Colors.black.withValues(alpha: 0.32), Colors.black.withValues(alpha: 0)],
+        ),
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_UnderShadowPainter old) => true;
+}
+
+/// The soft shadow under the folded-over part.
+class _DropShadowPainter extends CustomPainter {
+  _DropShadowPainter(this.fold);
+  final _Fold fold;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (fold.foldedPart.length < 3) return;
+    canvas.drawShadow(fold.pathOf(fold.foldedPart), Colors.black, 6, false);
+  }
+
+  @override
+  bool shouldRepaint(_DropShadowPainter old) => true;
+}
+
+/// Light and shade across the folded part so it looks rolled, not flat:
+/// dark in the crease, a highlight where it bends, then fading out.
+class _RollPainter extends CustomPainter {
+  _RollPainter(this.fold);
+  final _Fold fold;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (fold.foldedPart.length < 3) return;
+    final width = math.max(fold.depth, 1.0);
+    canvas.drawPath(
+      fold.pathOf(fold.foldedPart),
+      Paint()
+        ..shader = ui.Gradient.linear(
+          fold.mid,
+          fold.mid + fold.normal * width,
+          [
+            Colors.black.withValues(alpha: 0.22),
+            Colors.white.withValues(alpha: 0.28),
+            Colors.white.withValues(alpha: 0.0),
+            Colors.black.withValues(alpha: 0.10),
+          ],
+          const [0, 0.12, 0.45, 1],
+        ),
+    );
+    // The crease itself.
+    canvas.drawPath(
+      fold.pathOf(fold.flatPart),
+      Paint()
+        ..shader = ui.Gradient.linear(
+          fold.mid,
+          fold.mid + fold.normal * math.min(18.0, width),
+          [Colors.black.withValues(alpha: 0.14), Colors.black.withValues(alpha: 0)],
+        ),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_RollPainter old) => true;
 }
 
 /// A slightly lifted page corner, hinting the page can be turned.

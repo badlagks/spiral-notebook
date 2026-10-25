@@ -126,6 +126,25 @@ void main() {
     expect(find.text('Pages 3–4'), findsOneWidget);
   });
 
+  testWidgets('the page curls back when you drag from the coil, or lets go early', (tester) async {
+    final store = await pumpApp(tester, const Size(390, 844));
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    expect(store.pageIndex, 1);
+
+    final book = tester.getRect(find.byType(FlippingBook));
+    // A short pull from the right edge springs back.
+    await tester.dragFrom(book.bottomRight - const Offset(12, 60), const Offset(-30, -10));
+    await tester.pumpAndSettle();
+    expect(store.pageIndex, 1);
+
+    // Pulling the previous page over from the coil turns back.
+    await tester.dragFrom(book.centerLeft + const Offset(26, 0), const Offset(220, 0));
+    await tester.pumpAndSettle();
+    expect(store.pageIndex, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a phone held sideways shows two pages', (tester) async {
     await pumpApp(tester, const Size(844, 390));
     expect(find.text('Draft Outline'), findsOneWidget);
