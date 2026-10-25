@@ -7,7 +7,50 @@ import 'package:web/web.dart' as web;
 
 import 'media_store.dart';
 
-MediaStore createMediaStore() => _IndexedDbMediaStore();
+MediaStore createMediaStore() => _FallbackStore(_IndexedDbMediaStore(), MemoryMediaStore());
+
+/// Uses the browser's database, or memory for this visit if the browser
+/// blocks it (some private windows and embedded pages do).
+class _FallbackStore extends MediaStore {
+  _FallbackStore(this._main, this._spare);
+  final MediaStore _main, _spare;
+  bool _blocked = false;
+
+  Future<T> _try<T>(Future<T> Function(MediaStore s) run) async {
+    if (!_blocked) {
+      try {
+        return await run(_main);
+      } catch (_) {
+        _blocked = true;
+      }
+    }
+    return run(_spare);
+  }
+
+  @override
+  Future<void> put(String id, Uint8List bytes, {required String mime, String name = ''}) =>
+      _try((s) => s.put(id, bytes, mime: mime, name: name));
+
+  @override
+  Future<Uint8List?> get(String id) => _try((s) => s.get(id));
+
+  @override
+  Future<void> delete(String id) => _try((s) => s.delete(id));
+
+  @override
+  Future<List<String>> ids() => _try((s) => s.ids());
+
+  @override
+  Future<VideoPlayerController?> videoPlayer(String id) async {
+    if (_blocked) {
+      final bytes = await _spare.get(id);
+      if (bytes == null) return null;
+      final url = web.URL.createObjectURL(web.Blob([bytes.toJS].toJS));
+      return VideoPlayerController.networkUrl(Uri.parse(url));
+    }
+    return _try((s) => s.videoPlayer(id));
+  }
+}
 
 /// Media kept in the browser's own database on this computer.
 class _IndexedDbMediaStore extends MediaStore {
