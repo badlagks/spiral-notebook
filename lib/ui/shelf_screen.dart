@@ -15,7 +15,7 @@ const _monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Se
 
 String _when(DateTime t) {
   final now = DateTime.now();
-  if (t.year == now.year && t.month == now.month && t.day == now.day) return 'Today';
+  if (t.year == now.year && t.month == now.month && t.day == now.day) return 'today';
   return '${t.day} ${_monthNames[t.month - 1]}${t.year != now.year ? ' ${t.year}' : ''}';
 }
 

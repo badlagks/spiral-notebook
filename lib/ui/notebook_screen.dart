@@ -140,25 +140,29 @@ class _TopBar extends StatelessWidget {
     final store = StoreScope.of(context);
     final section = store.section;
     final narrow = MediaQuery.sizeOf(context).width < 520;
+    final tiny = MediaQuery.sizeOf(context).width < 420;
     final left = store.pageIndex - store.pageIndex % 2;
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 4, 8, 0),
       child: Row(
         children: [
           _iconButton(Icons.collections_bookmark_outlined, 'All notebooks', () => showShelf(context)),
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: Color(section.color), shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              section.name,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Chrome.strong, fontSize: 16, fontWeight: FontWeight.w600),
+          // On a small phone the tabs already say which section this is.
+          if (!tiny) ...[
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(color: Color(section.color), shape: BoxShape.circle),
             ),
-          ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                section.name,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: Chrome.strong, fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
           if (spread) ...[
             const SizedBox(width: 8),
             _iconButton(Icons.chevron_left, 'Previous pages', left > 0 ? () => flip.flip(-1) : null),
