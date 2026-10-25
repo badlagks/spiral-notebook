@@ -18,7 +18,7 @@ enum SaveState { saved, saving, failed }
 /// Holds the notebook in memory and saves it on the device a moment after
 /// each change. Widgets edit the models directly, then call [changed].
 class NotebookStore extends ChangeNotifier {
-  NotebookStore._(this._notebook, this.shelf, this._docs);
+  NotebookStore._(this._notebook, this.shelf, this._docs) : _committed = jsonEncode(_notebook.toJson());
 
   /// Where the single notebook was kept before there was a shelf.
   static const _oldKey = 'notebook.v1';
@@ -40,14 +40,105 @@ class NotebookStore extends ChangeNotifier {
   /// without rebuilding the pages.
   final saveState = ValueNotifier(SaveState.saved);
 
-  /// The chosen look and paper colour. The app rebuilds its screen on change.
-  late final appearance = ValueNotifier((notebook.look, notebook.tone, notebook.id));
+  /// The chosen look and paper colour, which notebook is open, and how many
+  /// times it was put back by Undo. The app redraws its screen on change.
+  late final appearance = ValueNotifier((notebook.look, notebook.tone, notebook.id, 0));
+
+  void _redraw() => appearance.value = (notebook.look, notebook.tone, notebook.id, appearance.value.$4 + 1);
 
   void setAppearance({Look? look, PaperTone? tone}) {
     notebook.look = look ?? notebook.look;
     notebook.tone = tone ?? notebook.tone;
-    appearance.value = (notebook.look, notebook.tone, notebook.id);
+    _redraw();
     changed();
+  }
+
+  // Undo and redo for everything, kept as copies of the whole notebook.
+  // A step ends at each save, a moment after the last change, and after
+  // each line drawn.
+  static const _historyLimit = 30;
+  final _undoSteps = <String>[];
+  final _redoSteps = <String>[];
+  String _committed;
+  bool _dirty = false;
+
+  /// Bumps when Undo or Redo may have become possible or impossible.
+  final history = ValueNotifier(0);
+
+  bool get canUndo => _dirty || _undoSteps.isNotEmpty;
+  bool get canRedo => !_dirty && _redoSteps.isNotEmpty;
+
+  /// Ends the current step, so the next change can be undone on its own.
+  /// Returns the notebook as saved text.
+  String checkpoint() {
+    final now = jsonEncode(notebook.toJson());
+    _dirty = false;
+    if (now != _committed) {
+      _undoSteps.add(_committed);
+      if (_undoSteps.length > _historyLimit) _undoSteps.removeAt(0);
+      _redoSteps.clear();
+      _committed = now;
+    }
+    history.value++;
+    return now;
+  }
+
+  void undo() {
+    checkpoint();
+    if (_undoSteps.isEmpty) return;
+    _redoSteps.add(_committed);
+    _putBack(_undoSteps.removeLast());
+  }
+
+  void redo() {
+    if (_dirty || _redoSteps.isEmpty) return;
+    _undoSteps.add(_committed);
+    _putBack(_redoSteps.removeLast());
+  }
+
+  void _resetHistory() {
+    _undoSteps.clear();
+    _redoSteps.clear();
+    _committed = jsonEncode(notebook.toJson());
+    _dirty = false;
+    history.value++;
+  }
+
+  static Iterable<Block> _blocks(Notebook nb) => nb.sections.expand((s) => s.pages).expand((p) => p.blocks);
+
+  /// Puts the notebook back as it was in [raw], then shows the page that changed.
+  void _putBack(String raw) {
+    final nb = Notebook.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    // A reminder that already rang doesn't ring again because of Undo.
+    final rang = {
+      for (final b in _blocks(notebook))
+        if (b.reminder?.rang ?? false) b.id,
+    };
+    for (final b in _blocks(nb)) {
+      if (rang.contains(b.id)) b.reminder?.rang = true;
+    }
+    final pagesBefore = {for (final p in notebook.sections.expand((s) => s.pages)) p.id: jsonEncode(p.toJson())};
+    _notebook = nb;
+    _committed = raw;
+    _dirty = false;
+    var shown = false;
+    for (var si = 0; si < nb.sections.length && !shown; si++) {
+      final pages = nb.sections[si].pages;
+      for (var pi = 0; pi < pages.length; pi++) {
+        if (pagesBefore[pages[pi].id] != jsonEncode(pages[pi].toJson())) {
+          _sectionIndex = si;
+          _pageIndex = pi;
+          shown = true;
+          break;
+        }
+      }
+    }
+    _sectionIndex = _sectionIndex.clamp(0, nb.sections.length - 1);
+    _pageIndex = _pageIndex.clamp(0, section.pages.length - 1);
+    history.value++;
+    _redraw();
+    notifyListeners();
+    _scheduleSave();
   }
 
   int _sectionIndex = 0;
@@ -240,7 +331,8 @@ class NotebookStore extends ChangeNotifier {
     // Other notebooks' alarms stay set on the device; this one's are added.
     _scheduled.clear();
     purgeArchive(DateTime.now());
-    appearance.value = (nb.look, nb.tone, nb.id);
+    _redraw();
+    _resetHistory();
     notifyListeners();
     unawaited(syncAlarms());
   }
@@ -460,7 +552,7 @@ class NotebookStore extends ChangeNotifier {
     _sectionIndex = 0;
     _pageIndex = 0;
     _unlocked.clear();
-    appearance.value = (notebook.look, notebook.tone, notebook.id);
+    _redraw();
     changed();
   }
 
@@ -606,12 +698,22 @@ class NotebookStore extends ChangeNotifier {
   /// Call after editing any model so the change is shown and saved.
   void changed() {
     notifyListeners();
+    _markDirty();
     _scheduleSave();
   }
 
   /// Like [changed], but without rebuilding listeners. Used while typing,
   /// where the text field already shows the new text.
-  void changedQuietly() => _scheduleSave();
+  void changedQuietly() {
+    _markDirty();
+    _scheduleSave();
+  }
+
+  void _markDirty() {
+    if (_dirty) return;
+    _dirty = true;
+    history.value++;
+  }
 
   void _scheduleSave() {
     if (_docs == null) return;
@@ -625,7 +727,7 @@ class NotebookStore extends ChangeNotifier {
     final docs = _docs;
     if (docs == null) return;
     try {
-      await docs.write(_doc(notebook.id), jsonEncode(notebook.toJson()));
+      await docs.write(_doc(notebook.id), checkpoint());
       var e = shelf.find(notebook.id);
       if (e == null) shelf.entries.add(e = _entryFor(notebook));
       e
@@ -667,6 +769,7 @@ class NotebookStore extends ChangeNotifier {
     _saveTimer?.cancel();
     saveState.dispose();
     appearance.dispose();
+    history.dispose();
     super.dispose();
   }
 }

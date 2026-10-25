@@ -68,12 +68,19 @@ class _NotebookScreenState extends State<NotebookScreen> {
         // An open foldable shows two pages with the coil down the fold, like a real notebook.
         final foldX = Paper.plain ? null : verticalFoldX(mq);
         final spread = showsSpread(constraints.biggest) || foldX != null;
+        final store = StoreScope.read(context);
         return CallbackShortcuts(
           bindings: {
             const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () => showNotebookSearch(context),
             const SingleActivator(LogicalKeyboardKey.keyF, control: true): () => showNotebookSearch(context),
             const SingleActivator(LogicalKeyboardKey.pageDown): () => _flip.flip(1),
             const SingleActivator(LogicalKeyboardKey.pageUp): () => _flip.flip(-1),
+            // A text box being typed in handles these itself, letter by letter.
+            const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): store.undo,
+            const SingleActivator(LogicalKeyboardKey.keyZ, control: true): store.undo,
+            const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true): store.redo,
+            const SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true): store.redo,
+            const SingleActivator(LogicalKeyboardKey.keyY, control: true): store.redo,
           },
           child: Focus(
             autofocus: true,
@@ -160,6 +167,7 @@ class _TopBar extends StatelessWidget {
           const Spacer(),
           const _SaveBadge(),
           const SizedBox(width: 4),
+          _UndoButtons(withRedo: !narrow),
           _iconButton(Icons.grid_view_outlined, 'All pages', () => showPageOverview(context)),
           _iconButton(Icons.calendar_month_outlined, 'Calendar', () => showCalendar(context)),
           const _MoreMenu(),
@@ -211,31 +219,61 @@ class _MoreMenu extends StatelessWidget {
       tooltip: 'More',
       icon: Icon(Icons.menu, color: Chrome.normal),
       onSelected: (v) => switch (v) {
+        'redo' => StoreScope.read(context).redo(),
         'look' => showLookPicker(context),
         'backup' => backUpNotebook(context),
         'restore' => restoreNotebook(context),
         'pdf' => importPdf(context),
         _ => null,
       },
-      itemBuilder: (_) => const [
-        PopupMenuItem(
+      itemBuilder: (_) => [
+        if (MediaQuery.sizeOf(context).width < 520) ...[
+          PopupMenuItem(
+            value: 'redo',
+            enabled: StoreScope.read(context).canRedo,
+            child: const ListTile(leading: Icon(Icons.redo), title: Text('Redo')),
+          ),
+          const PopupMenuDivider(),
+        ],
+        const PopupMenuItem(
           value: 'look',
           child: ListTile(leading: Icon(Icons.palette_outlined), title: Text('Look and paper colour')),
         ),
-        PopupMenuDivider(),
-        PopupMenuItem(
+        const PopupMenuDivider(),
+        const PopupMenuItem(
           value: 'backup',
           child: ListTile(leading: Icon(Icons.save_alt), title: Text('Back up notebook')),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: 'restore',
           child: ListTile(leading: Icon(Icons.restore), title: Text('Restore from a backup')),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: 'pdf',
           child: ListTile(leading: Icon(Icons.picture_as_pdf_outlined), title: Text('Import a PDF to write on')),
         ),
       ],
+    );
+  }
+}
+
+/// Takes back the last change, whatever it was, or puts it back again.
+class _UndoButtons extends StatelessWidget {
+  const _UndoButtons({required this.withRedo});
+  final bool withRedo;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.read(context);
+    return ValueListenableBuilder(
+      valueListenable: store.history,
+      builder: (context, _, _) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _iconButton(Icons.undo, 'Undo', store.canUndo ? store.undo : null),
+          if (withRedo) _iconButton(Icons.redo, 'Redo', store.canRedo ? store.redo : null),
+        ],
+      ),
     );
   }
 }

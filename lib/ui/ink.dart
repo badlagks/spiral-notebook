@@ -16,8 +16,8 @@ const highlighterColors = <int>[0xFFFFEB3B, 0xFF7CF29C, 0xFFFF9EC7, 0xFF8FD3FF];
 /// Pen sizes in paper units: fine, medium, bold.
 const penSizes = <double>[1.6, 2.6, 4.2];
 
-/// What the drawing tools are set to, shared by every page, plus undo and
-/// redo for drawing on each page (kept until the app closes).
+/// What the drawing tools are set to, shared by every page, plus the lines
+/// circled with the lasso.
 class InkController extends ChangeNotifier {
   bool _drawing = false;
   DrawTool _tool = DrawTool.pen;
@@ -25,12 +25,6 @@ class InkController extends ChangeNotifier {
   int _highlighterColor = highlighterColors.first;
   double _size = penSizes[1];
   bool _stylusSeen = false;
-
-  final _undo = <String, List<_InkChange>>{};
-  final _redo = <String, List<_InkChange>>{};
-
-  /// The page drawn on most recently, which Undo and Redo act on.
-  NotePage? _lastPage;
 
   /// Lines circled with the lasso, and the page they are on.
   Set<InkStroke> _selection = {};
@@ -73,7 +67,6 @@ class InkController extends ChangeNotifier {
   void _changeSelection(NotebookStore store, InkStroke? Function(InkStroke s) change) {
     final page = _selectionPage;
     if (page == null || _selection.isEmpty) return;
-    final before = List.of(page.strokes);
     final kept = <InkStroke>{};
     for (var i = page.strokes.length - 1; i >= 0; i--) {
       if (!_selection.contains(page.strokes[i])) continue;
@@ -86,8 +79,8 @@ class InkController extends ChangeNotifier {
       }
     }
     _selection = kept;
-    _record(page, _InkChange.snapshot(before, List.of(page.strokes)));
     store.changed();
+    _record(store);
   }
 
   void recolorSelection(int color, NotebookStore store) => _changeSelection(store, (s) => s.transformed(color: color));
@@ -121,78 +114,23 @@ class InkController extends ChangeNotifier {
     _ => _drawing,
   };
 
-  bool canUndo(NotePage? page) => page != null && (_undo[page.id]?.isNotEmpty ?? false);
-  bool canRedo(NotePage? page) => page != null && (_redo[page.id]?.isNotEmpty ?? false);
-  NotePage? get lastPage => _lastPage;
-
-  void _record(NotePage page, _InkChange change) {
-    _lastPage = page;
-    (_undo[page.id] ??= []).add(change);
-    _redo[page.id]?.clear();
+  /// Ends a drawing step, so Undo takes back one line at a time.
+  void _record(NotebookStore store) {
+    store.checkpoint();
     notifyListeners();
   }
 
-  void undo(NotePage page, NotebookStore store) {
-    final stack = _undo[page.id];
-    if (stack == null || stack.isEmpty) return;
-    final change = stack.removeLast();
+  /// Undo and Redo act on the whole notebook, drawing included.
+  void undo(NotebookStore store) {
     _selection = {};
-    change.revert(page);
-    (_redo[page.id] ??= []).add(change);
-    store.changed();
+    store.undo();
     notifyListeners();
   }
 
-  void redo(NotePage page, NotebookStore store) {
-    final stack = _redo[page.id];
-    if (stack == null || stack.isEmpty) return;
-    final change = stack.removeLast();
+  void redo(NotebookStore store) {
     _selection = {};
-    change.apply(page);
-    (_undo[page.id] ??= []).add(change);
-    store.changed();
+    store.redo();
     notifyListeners();
-  }
-}
-
-/// A drawing step that can be undone: lines added, lines erased, or lines
-/// moved, resized or recoloured with the lasso (kept as before and after).
-class _InkChange {
-  _InkChange.added(InkStroke s) : added = s, erased = const [], before = null, after = null;
-  _InkChange.erased(this.erased) : added = null, before = null, after = null;
-  _InkChange.snapshot(this.before, this.after) : added = null, erased = const [];
-
-  final InkStroke? added;
-
-  /// Erased lines with the position each had in the page's list.
-  final List<(int, InkStroke)> erased;
-
-  final List<InkStroke>? before, after;
-
-  void apply(NotePage page) {
-    if (after != null) {
-      page.strokes
-        ..clear()
-        ..addAll(after!);
-      return;
-    }
-    if (added != null) page.strokes.add(added!);
-    for (final (_, s) in erased) {
-      page.strokes.remove(s);
-    }
-  }
-
-  void revert(NotePage page) {
-    if (before != null) {
-      page.strokes
-        ..clear()
-        ..addAll(before!);
-      return;
-    }
-    if (added != null) page.strokes.remove(added);
-    for (final (i, s) in erased) {
-      page.strokes.insert(i.clamp(0, page.strokes.length), s);
-    }
   }
 }
 
@@ -298,9 +236,9 @@ class _InkLayerState extends State<InkLayer> {
     final d = _drag;
     _drag = null;
     if (d == null || d.originals.every((s) => d.current.contains(s))) return;
-    ink._record(widget.page, _InkChange.snapshot(d.before, List.of(widget.page.strokes)));
     ink.select(widget.page, d.current.toSet());
     StoreScope.read(context).changed();
+    ink._record(StoreScope.read(context));
   }
 
   /// Whether [p] is inside the closed loop [poly].
@@ -375,8 +313,8 @@ class _InkLayerState extends State<InkLayer> {
     }
     if (_erasing) {
       if (_erasedNow.isNotEmpty) {
-        ink._record(widget.page, _InkChange.erased(List.of(_erasedNow)));
         store.changed();
+        ink._record(store);
       }
       return;
     }
@@ -384,8 +322,8 @@ class _InkLayerState extends State<InkLayer> {
     _live = null;
     if (s == null) return;
     widget.page.strokes.add(s);
-    ink._record(widget.page, _InkChange.added(s));
     store.changed();
+    ink._record(store);
     setState(() {});
   }
 
@@ -606,7 +544,6 @@ class DrawToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final ink = InkScope.of(context);
     final store = StoreScope.of(context);
-    final page = ink.lastPage ?? store.page;
     final colors = ink.tool == DrawTool.highlighter ? highlighterColors : penColors;
     final lassoing = ink.tool == DrawTool.lasso && ink.hasSelection;
     final narrow = MediaQuery.sizeOf(context).width < 560;
@@ -654,12 +591,12 @@ class DrawToolbar extends StatelessWidget {
       _divider(),
       IconButton(
         tooltip: 'Undo',
-        onPressed: ink.canUndo(page) ? () => ink.undo(page, store) : null,
+        onPressed: store.canUndo ? () => ink.undo(store) : null,
         icon: const Icon(Icons.undo),
       ),
       IconButton(
         tooltip: 'Redo',
-        onPressed: ink.canRedo(page) ? () => ink.redo(page, store) : null,
+        onPressed: store.canRedo ? () => ink.redo(store) : null,
         icon: const Icon(Icons.redo),
       ),
       _divider(),

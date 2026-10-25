@@ -2,6 +2,7 @@ import 'dart:ui' show DisplayFeature, DisplayFeatureState, DisplayFeatureType;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spiral_notebook/data/alarms/alarms.dart';
 import 'package:spiral_notebook/data/notebook_store.dart';
@@ -29,6 +30,8 @@ Future<NotebookStore> pumpApp(WidgetTester tester, Size size) async {
   await tester.pumpAndSettle();
   return store;
 }
+
+Finder toolbarButton(String tip) => find.descendant(of: find.byType(DrawToolbar), matching: find.byTooltip(tip));
 
 void main() {
   testWidgets('a wide screen shows a two-page spread with tabs', (tester) async {
@@ -195,19 +198,21 @@ void main() {
     expect(page.strokes, hasLength(1));
     expect(page.strokes.single.points.length, greaterThan(5));
 
-    await tester.tap(find.byTooltip('Undo'));
-    await tester.pump();
-    expect(page.strokes, isEmpty);
-    await tester.tap(find.byTooltip('Redo'));
-    await tester.pump();
-    expect(page.strokes, hasLength(1));
+    // Undo puts the whole notebook back, so the page is read again after it.
+    await tester.tap(toolbarButton('Undo'));
+    await tester.pumpAndSettle();
+    expect(store.page.strokes, isEmpty);
+    await tester.tap(toolbarButton('Redo'));
+    await tester.pumpAndSettle();
+    expect(store.page.strokes, hasLength(1));
+    expect(find.byType(DrawToolbar), findsOneWidget);
 
     // The eraser removes a line it touches.
     await tester.tap(find.byTooltip('Eraser: touch a line to remove it'));
     await tester.pump();
     await tester.tapAt(center + const Offset(40, 15));
     await tester.pump();
-    expect(page.strokes, isEmpty);
+    expect(store.page.strokes, isEmpty);
 
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
@@ -332,9 +337,9 @@ void main() {
     await tester.pump();
     expect(page.strokes.single.points.first.x, greaterThan(before + 30));
 
-    await tester.tap(find.byTooltip('Undo'));
-    await tester.pump();
-    expect(page.strokes.single.points.first.x, closeTo(before, 0.01));
+    await tester.tap(toolbarButton('Undo'));
+    await tester.pumpAndSettle();
+    expect(store.page.strokes.single.points.first.x, closeTo(before, 0.01));
   });
 
   testWidgets('a section can be locked with a PIN, and opens with it', (tester) async {
@@ -597,6 +602,36 @@ void main() {
     await tester.drag(handle, const Offset(-700, 0));
     await tester.pumpAndSettle();
     expect(first.blocks, contains(sticky));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Undo and Redo take back any change, from the top bar or the keyboard', (tester) async {
+    final store = await pumpApp(tester, const Size(1400, 900));
+    expect(tester.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.undo)).onPressed, isNull);
+    await tester.tap(find.text('Call Sam about the sketches'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Widget options').hitTestable().first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Move to next page'));
+    await tester.pumpAndSettle();
+    bool onFirst() => store.sections.first.pages[0].blocks.any((b) => b is StickyBlock && b.text.contains('Call Sam'));
+    expect(onFirst(), isFalse);
+
+    await tester.tap(find.byTooltip('Undo'));
+    await tester.pumpAndSettle();
+    expect(onFirst(), isTrue);
+    expect(store.pageIndex, 0);
+    expect(find.text('Call Sam about the sketches'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Redo'));
+    await tester.pumpAndSettle();
+    expect(onFirst(), isFalse);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(onFirst(), isTrue);
     expect(tester.takeException(), isNull);
   });
 
