@@ -1,3 +1,5 @@
+import 'dart:ui' show DisplayFeature, DisplayFeatureState, DisplayFeatureType;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -536,6 +538,37 @@ void main() {
     await tester.pumpAndSettle();
     expect(store.notebook.showPhoneCalendar, isTrue);
     expect(find.text('Dentist'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an open foldable shows two pages with the coil on the fold', (tester) async {
+    tester.view.displayFeatures = [
+      const DisplayFeature(
+        bounds: Rect.fromLTWH(442, 0, 0, 1104),
+        type: DisplayFeatureType.fold,
+        state: DisplayFeatureState.postureFlat,
+      ),
+    ];
+    addTearDown(tester.view.resetDisplayFeatures);
+    await pumpApp(tester, const Size(884, 1104));
+    expect(find.text('Draft Outline'), findsOneWidget);
+    expect(find.text('Project Budget'), findsOneWidget);
+    final book = tester.getRect(find.byType(FlippingBook));
+    expect(book.center.dx, closeTo(442, 1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a foldable held closed, or a flip phone, keeps one page', (tester) async {
+    tester.view.displayFeatures = [
+      const DisplayFeature(
+        bounds: Rect.fromLTWH(0, 502, 412, 0),
+        type: DisplayFeatureType.fold,
+        state: DisplayFeatureState.postureFlat,
+      ),
+    ];
+    addTearDown(tester.view.resetDisplayFeatures);
+    await pumpApp(tester, const Size(412, 1004));
+    expect(find.text('Project Budget'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

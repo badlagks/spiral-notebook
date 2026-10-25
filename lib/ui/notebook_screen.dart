@@ -1,3 +1,5 @@
+import 'dart:ui' show DisplayFeatureType;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -24,6 +26,20 @@ import 'theme.dart';
 /// tablets show one page with the coil down its left edge.
 bool showsSpread(Size size) => (size.width > size.height && size.width >= 560) || size.width >= 1100;
 
+/// Where a book-style foldable (Galaxy Z Fold, Pixel Fold) folds, as an x
+/// position on screen, while it is open with the fold running top to bottom.
+/// Null on other screens, and on a flip phone, whose fold runs across.
+double? verticalFoldX(MediaQueryData mq) {
+  for (final f in mq.displayFeatures) {
+    if (f.type == DisplayFeatureType.cutout) continue;
+    final b = f.bounds;
+    if (b.height >= b.width && b.height > mq.size.height / 2 && b.center.dx > 0 && b.center.dx < mq.size.width) {
+      return b.center.dx;
+    }
+  }
+  return null;
+}
+
 /// The leather cover's margin around the pages, in paper units.
 const _coverMargin = 8.0;
 
@@ -47,7 +63,10 @@ class _NotebookScreenState extends State<NotebookScreen> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final spread = showsSpread(constraints.biggest);
+        final mq = MediaQuery.of(context);
+        // An open foldable shows two pages with the coil down the fold, like a real notebook.
+        final foldX = Paper.plain ? null : verticalFoldX(mq);
+        final spread = showsSpread(constraints.biggest) || foldX != null;
         return CallbackShortcuts(
           bindings: {
             const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () => showNotebookSearch(context),
@@ -77,7 +96,11 @@ class _NotebookScreenState extends State<NotebookScreen> {
                           child: Stack(
                             children: [
                               Positioned.fill(
-                                child: _Book(spread: spread, flip: _flip),
+                                child: _Book(
+                                  spread: spread,
+                                  flip: _flip,
+                                  foldX: foldX == null ? null : foldX - mq.padding.left,
+                                ),
                               ),
                               if (InkScope.of(context).drawing)
                                 const Positioned(left: 8, right: 8, bottom: 8, child: Center(child: DrawToolbar())),
@@ -290,8 +313,11 @@ class _SaveBadge extends StatelessWidget {
 
 /// The notebook itself: the cover, the pages (scaled to fit) and the tabs.
 class _Book extends StatelessWidget {
-  const _Book({required this.spread, required this.flip});
+  const _Book({required this.spread, required this.flip, this.foldX});
   final bool spread;
+
+  /// Where the screen folds, measured from the book's left edge.
+  final double? foldX;
   final FlipController flip;
 
   @override
@@ -370,20 +396,41 @@ class _Book extends StatelessWidget {
       ),
     );
 
+    const tabsWidth = 48.0;
+    final padLeft = spread ? 20.0 : 8.0;
     return Padding(
-      padding: EdgeInsets.fromLTRB(spread ? 20 : 8, 6, 0, spread ? 16 : 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(child: FittedBox(child: book)),
-          // Short screens (a phone held sideways) get shorter tabs so they all fit.
-          LayoutBuilder(
-            builder: (context, c) => SectionTabs(
-              tabWidth: spread ? 34 : 28,
-              tabHeight: ((c.maxHeight - 80) / (store.sections.length + 0.5)).clamp(48.0, spread ? 92.0 : 78.0),
-            ),
-          ),
-        ],
+      padding: EdgeInsets.fromLTRB(padLeft, 6, 0, spread ? 16 : 4),
+      child: LayoutBuilder(
+        builder: (context, box) {
+          // On a foldable, shift the book so its coil sits right on the fold.
+          var leftGap = 0.0, rightGap = 0.0;
+          if (foldX != null) {
+            final shift = 2 * (foldX! - padLeft) - (box.maxWidth - tabsWidth);
+            if (shift > 0) {
+              leftGap = shift;
+            } else {
+              rightGap = -shift;
+            }
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(width: leftGap),
+              Expanded(child: FittedBox(child: book)),
+              SizedBox(width: rightGap),
+              // Short screens (a phone held sideways) get shorter tabs so they all fit.
+              SizedBox(
+                width: tabsWidth,
+                child: LayoutBuilder(
+                  builder: (context, c) => SectionTabs(
+                    tabWidth: spread ? 34 : 28,
+                    tabHeight: ((c.maxHeight - 80) / (store.sections.length + 0.5)).clamp(48.0, spread ? 92.0 : 78.0),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
