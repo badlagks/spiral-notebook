@@ -202,10 +202,10 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
   }
 
   Widget _page(int index, {required bool left}) => SizedBox(
-        width: pageWidth,
-        height: pageHeight,
-        child: widget.buildPage(index, bindingOnLeft: !left, interactive: !_busy),
-      );
+    width: pageWidth,
+    height: pageHeight,
+    child: widget.buildPage(index, bindingOnLeft: !left, interactive: !_busy),
+  );
 
   // ----- Two pages side by side -----
 
@@ -223,11 +223,7 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
         Positioned(left: 0, top: 0, child: _page(b, left: true)),
         Positioned(left: pageWidth + spineWidth, top: 0, child: _page(b + 3, left: false)),
         _spine(),
-        ..._curl(
-          front: _page(b + 1, left: false),
-          back: _page(b + 2, left: true),
-          backLeft: 0,
-        ),
+        ..._curl(front: _page(b + 1, left: false), back: _page(b + 2, left: true), backLeft: 0),
       ];
     }
     return SizedBox(
@@ -236,32 +232,52 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Positioned.fill(key: const ValueKey('pages'), child: Stack(clipBehavior: Clip.none, children: layers)),
+          Positioned.fill(
+            key: const ValueKey('pages'),
+            child: Stack(clipBehavior: Clip.none, children: layers),
+          ),
           // Grab strips on the outer edges, with a turned-up corner as a hint.
           // Keyed so a drag in progress survives the pages changing underneath.
-          Positioned(key: const ValueKey('grab-back'), left: 0, top: 0, bottom: 0, width: _grabStrip, child: _grab(-1, cornerOnLeft: true)),
-          Positioned(key: const ValueKey('grab-next'), right: 0, top: 0, bottom: 0, width: _grabStrip, child: _grab(1, cornerOnLeft: false)),
+          Positioned(
+            key: const ValueKey('grab-back'),
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: _grabStrip,
+            child: _grab(-1, cornerOnLeft: true),
+          ),
+          Positioned(
+            key: const ValueKey('grab-next'),
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: _grabStrip,
+            child: _grab(1, cornerOnLeft: false),
+          ),
         ],
       ),
     );
   }
 
   Widget _spine() => Positioned(
-        left: pageWidth,
-        top: 0,
-        width: spineWidth,
-        height: pageHeight,
-        child: Paper.plain
-            // Plain paper just has a faint fold down the middle.
-            ? DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Paper.sheet, Color.lerp(Paper.sheet, Colors.black, 0.035)!, Paper.sheet],
-                  ),
-                ),
-              )
-            : const ColoredBox(color: Color(0xFFE9DFC8), child: CustomPaint(painter: SpiralPainter())),
-      );
+    left: pageWidth,
+    top: 0,
+    width: spineWidth,
+    height: pageHeight,
+    child: Paper.plain
+        // Plain paper just has a faint fold down the middle.
+        ? DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Paper.sheet, Color.lerp(Paper.sheet, Colors.black, 0.035)!, Paper.sheet],
+              ),
+            ),
+          )
+        : const ColoredBox(
+            color: Color(0xFFE9DFC8),
+            child: CustomPaint(painter: SpiralPainter()),
+          ),
+  );
 
   // ----- One page, coil on the left -----
 
@@ -293,7 +309,10 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
         clipBehavior: Clip.none,
         children: [
           // The page rolls away over the coil and out of sight.
-          Positioned.fill(key: const ValueKey('pages'), child: ClipRect(child: Stack(children: layers))),
+          Positioned.fill(
+            key: const ValueKey('pages'),
+            child: ClipRect(child: Stack(children: layers)),
+          ),
           if (!Paper.plain)
             const Positioned(
               key: ValueKey('spine'),
@@ -311,7 +330,14 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
             width: 28,
             child: _grab(-1, cornerOnLeft: true, showCorner: false),
           ),
-          Positioned(key: const ValueKey('grab-next'), right: 0, top: 0, bottom: 0, width: _grabStrip, child: _grab(1, cornerOnLeft: false)),
+          Positioned(
+            key: const ValueKey('grab-next'),
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: _grabStrip,
+            child: _grab(1, cornerOnLeft: false),
+          ),
         ],
       ),
     );
@@ -322,7 +348,12 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
   ///
   /// [back] is laid out where it lies once the sheet is turned, at [backLeft].
   /// With [backIsMirror] it is the sheet's own reverse side instead.
-  List<Widget> _curl({required Widget front, required Widget back, required double backLeft, bool backIsMirror = false}) {
+  List<Widget> _curl({
+    required Widget front,
+    required Widget back,
+    required double backLeft,
+    bool backIsMirror = false,
+  }) {
     final fold = _Fold(rest: _rest, corner: _corner, sheet: _sheet);
     final sheet = Positioned(left: _sheet.left, top: 0, child: front);
     if (fold.flat) return [sheet];
@@ -333,12 +364,21 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
     final toNow = backIsMirror
         ? (mirror..translateByDouble(_sheet.left - backLeft, 0, 0, 1))
         : (mirror
-          ..translateByDouble(2 * _hingeX, 0, 0, 1)
-          ..scaleByDouble(-1, 1, 1, 1));
+            ..translateByDouble(2 * _hingeX, 0, 0, 1)
+            ..scaleByDouble(-1, 1, 1, 1));
     return [
-      Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _UnderShadowPainter(fold)))),
-      Positioned.fill(child: ClipPath(clipper: _PolygonClipper(fold.flatPart), child: Stack(children: [sheet]))),
-      Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _DropShadowPainter(fold)))),
+      Positioned.fill(
+        child: IgnorePointer(child: CustomPaint(painter: _UnderShadowPainter(fold))),
+      ),
+      Positioned.fill(
+        child: ClipPath(
+          clipper: _PolygonClipper(fold.flatPart),
+          child: Stack(children: [sheet]),
+        ),
+      ),
+      Positioned.fill(
+        child: IgnorePointer(child: CustomPaint(painter: _DropShadowPainter(fold))),
+      ),
       Positioned.fill(
         child: IgnorePointer(
           child: ClipPath(
@@ -347,15 +387,15 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
               transform: toNow,
               child: Stack(
                 clipBehavior: Clip.none,
-                children: [
-                  Positioned(left: backLeft, top: 0, child: back),
-                ],
+                children: [Positioned(left: backLeft, top: 0, child: back)],
               ),
             ),
           ),
         ),
       ),
-      Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _RollPainter(fold)))),
+      Positioned.fill(
+        child: IgnorePointer(child: CustomPaint(painter: _RollPainter(fold))),
+      ),
     ];
   }
 
@@ -363,7 +403,10 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
     final corner = showCorner && !_busy
         ? GestureDetector(
             onTap: () => _turn(dir),
-            child: CustomPaint(size: const Size(30, 30), painter: _CornerPainter(onLeft: cornerOnLeft)),
+            child: CustomPaint(
+              size: const Size(30, 30),
+              painter: _CornerPainter(onLeft: cornerOnLeft),
+            ),
           )
         : null;
     final align = cornerOnLeft ? Alignment.bottomLeft : Alignment.bottomRight;
@@ -424,10 +467,22 @@ class _Fold {
     final (nx, ny) = (normal.dx, normal.dy);
     final k = 2 * (mid.dx * nx + mid.dy * ny);
     return Matrix4(
-      1 - 2 * nx * nx, -2 * nx * ny, 0, 0, //
-      -2 * nx * ny, 1 - 2 * ny * ny, 0, 0,
-      0, 0, 1, 0,
-      k * nx, k * ny, 0, 1,
+      1 - 2 * nx * nx,
+      -2 * nx * ny,
+      0,
+      0, //
+      -2 * nx * ny,
+      1 - 2 * ny * ny,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      k * nx,
+      k * ny,
+      0,
+      1,
     );
   }
 
@@ -473,11 +528,10 @@ class _UnderShadowPainter extends CustomPainter {
     canvas.drawRect(
       fold.sheet,
       Paint()
-        ..shader = ui.Gradient.linear(
-          fold.mid,
-          fold.mid - fold.normal * reach,
-          [Colors.black.withValues(alpha: 0.32), Colors.black.withValues(alpha: 0)],
-        ),
+        ..shader = ui.Gradient.linear(fold.mid, fold.mid - fold.normal * reach, [
+          Colors.black.withValues(alpha: 0.32),
+          Colors.black.withValues(alpha: 0),
+        ]),
     );
     canvas.restore();
   }
@@ -530,11 +584,10 @@ class _RollPainter extends CustomPainter {
     canvas.drawPath(
       fold.pathOf(fold.flatPart),
       Paint()
-        ..shader = ui.Gradient.linear(
-          fold.mid,
-          fold.mid + fold.normal * math.min(18.0, width),
-          [Colors.black.withValues(alpha: 0.14), Colors.black.withValues(alpha: 0)],
-        ),
+        ..shader = ui.Gradient.linear(fold.mid, fold.mid + fold.normal * math.min(18.0, width), [
+          Colors.black.withValues(alpha: 0.14),
+          Colors.black.withValues(alpha: 0),
+        ]),
     );
   }
 

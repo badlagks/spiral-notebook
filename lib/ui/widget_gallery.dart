@@ -68,29 +68,35 @@ final galleryEntries = <GalleryEntry>[
     description: 'Tick things off. Press Enter for the next item.',
     icon: Icons.checklist,
     make: () => ChecklistBlock(),
-    sample: () => ChecklistBlock(items: [
-      ChecklistItem(text: 'Call client', done: true),
-      ChecklistItem(text: 'Draft design'),
-      ChecklistItem(text: 'Send invoice'),
-    ]),
+    sample: () => ChecklistBlock(
+      items: [
+        ChecklistItem(text: 'Call client', done: true),
+        ChecklistItem(text: 'Draft design'),
+        ChecklistItem(text: 'Send invoice'),
+      ],
+    ),
   ),
   GalleryEntry(
     name: 'Spreadsheet',
     description: 'Rows and columns with formulas like =SUM(D2:D4).',
     icon: Icons.grid_on,
-    make: () => SheetBlock(cells: [
-      ['Item', 'Qty', 'Price', 'Total'],
-      ['', '', '', '=B2*C2'],
-      ['', '', '', '=B3*C3'],
-      ['', '', '', '=B4*C4'],
-      ['', '', 'Total', '=SUM(D2:D4)'],
-    ]),
-    sample: () => SheetBlock(cells: [
-      ['Item', 'Qty', 'Price', 'Total'],
-      ['Paper', '2', '\$4.50', '=B2*C2'],
-      ['Pens', '3', '\$1.20', '=B3*C3'],
-      ['', '', 'Total', '=SUM(D2:D3)'],
-    ]),
+    make: () => SheetBlock(
+      cells: [
+        ['Item', 'Qty', 'Price', 'Total'],
+        ['', '', '', '=B2*C2'],
+        ['', '', '', '=B3*C3'],
+        ['', '', '', '=B4*C4'],
+        ['', '', 'Total', '=SUM(D2:D4)'],
+      ],
+    ),
+    sample: () => SheetBlock(
+      cells: [
+        ['Item', 'Qty', 'Price', 'Total'],
+        ['Paper', '2', '\$4.50', '=B2*C2'],
+        ['Pens', '3', '\$1.20', '=B3*C3'],
+        ['', '', 'Total', '=SUM(D2:D3)'],
+      ],
+    ),
   ),
   GalleryEntry(
     name: 'Calculator',
@@ -147,10 +153,8 @@ bool get _hasCamera =>
     !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
 
 /// Shows every widget with a live preview. Returns the widget to add, or null.
-Future<Block?> showWidgetGallery(BuildContext context) => showDialog<Block>(
-      context: context,
-      builder: (_) => const _GalleryDialog(),
-    );
+Future<Block?> showWidgetGallery(BuildContext context) =>
+    showDialog<Block>(context: context, builder: (_) => const _GalleryDialog());
 
 class _GalleryDialog extends StatefulWidget {
   const _GalleryDialog();
@@ -168,10 +172,10 @@ class _GalleryDialogState extends State<_GalleryDialog> {
   bool _picking = false;
 
   void _show(GalleryEntry e) => setState(() {
-        _open = e;
-        _tryOut = e.sample();
-        _picked = null;
-      });
+    _open = e;
+    _tryOut = e.sample();
+    _picked = null;
+  });
 
   Future<void> _pick(MediaKind kind, {bool camera = false}) async {
     setState(() => _picking = true);
@@ -219,10 +223,7 @@ class _GalleryDialogState extends State<_GalleryDialog> {
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
             childAspectRatio: 0.92,
-            children: [
-              for (final e in galleryEntries)
-                _Card(entry: e, onTap: () => _show(e)),
-            ],
+            children: [for (final e in galleryEntries) _Card(entry: e, onTap: () => _show(e))],
           ),
         ),
       ],
@@ -240,12 +241,13 @@ class _GalleryDialogState extends State<_GalleryDialog> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Text(
-              e.media == null
-                  ? '${e.description} Try it below before adding it.'
-                  : _picked == null
-                      ? '${e.description} Here is an example. Choose your own to see it here before adding it.'
-                      : 'Here is how it will look. Add a note or to-dos now or later.',
-              style: const TextStyle(fontSize: 14, color: Color(0xFF555555))),
+            e.media == null
+                ? '${e.description} Try it below before adding it.'
+                : _picked == null
+                ? '${e.description} Here is an example. Choose your own to see it here before adding it.'
+                : 'Here is how it will look. Add a note or to-dos now or later.',
+            style: const TextStyle(fontSize: 14, color: Color(0xFF555555)),
+          ),
         ),
         Flexible(
           child: Container(
@@ -314,24 +316,20 @@ class _GalleryDialogState extends State<_GalleryDialog> {
   }
 
   Widget _titleBar(String title, VoidCallback? onBack) => Padding(
-        padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-        child: Row(
-          children: [
-            if (onBack != null)
-              IconButton(tooltip: 'Back', onPressed: onBack, icon: const Icon(Icons.arrow_back))
-            else
-              const SizedBox(width: 12),
-            Expanded(
-              child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-            ),
-            IconButton(
-              tooltip: 'Close',
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.close),
-            ),
-          ],
+    padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+    child: Row(
+      children: [
+        if (onBack != null)
+          IconButton(tooltip: 'Back', onPressed: onBack, icon: const Icon(Icons.arrow_back))
+        else
+          const SizedBox(width: 12),
+        Expanded(
+          child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
         ),
-      );
+        IconButton(tooltip: 'Close', onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+      ],
+    ),
+  );
 }
 
 class _Card extends StatelessWidget {
@@ -372,7 +370,9 @@ class _Card extends StatelessWidget {
                 children: [
                   Icon(entry.icon, size: 18, color: Pen.blue),
                   const SizedBox(width: 6),
-                  Expanded(child: Text(entry.name, style: const TextStyle(fontWeight: FontWeight.w600))),
+                  Expanded(
+                    child: Text(entry.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ),
                 ],
               ),
             ),

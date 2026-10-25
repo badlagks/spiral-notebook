@@ -130,8 +130,7 @@ class _Num {
   final bool currency;
 }
 
-final _tokenPattern = RegExp(
-    r'\s*(?:(\d+(?:\.\d*)?|\.\d+)|([A-Za-z]+\d+)(?::([A-Za-z]+\d+))?|([A-Za-z]+)|(.))');
+final _tokenPattern = RegExp(r'\s*(?:(\d+(?:\.\d*)?|\.\d+)|([A-Za-z]+\d+)(?::([A-Za-z]+\d+))?|([A-Za-z]+)|(.))');
 final _refPattern = RegExp(r'^([A-Za-z]+)(\d+)$');
 
 class _Parser {
@@ -160,8 +159,7 @@ class _Parser {
     while (_peekSymbol == '+' || _peekSymbol == '-') {
       final op = _tokens[_pos++].group(5);
       final right = _term();
-      left = _Num(op == '+' ? left.value + right.value : left.value - right.value,
-          left.currency || right.currency);
+      left = _Num(op == '+' ? left.value + right.value : left.value - right.value, left.currency || right.currency);
     }
     return left;
   }
@@ -172,8 +170,7 @@ class _Parser {
       final op = _tokens[_pos++].group(5);
       final right = _power();
       if (op == '/' && right.value == 0) throw _FormulaError('#DIV/0!');
-      left = _Num(op == '*' ? left.value * right.value : left.value / right.value,
-          left.currency || right.currency);
+      left = _Num(op == '*' ? left.value * right.value : left.value / right.value, left.currency || right.currency);
     }
     return left;
   }

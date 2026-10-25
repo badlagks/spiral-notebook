@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/notebook_store.dart';
+import '../models/notebook.dart';
 import 'archive_dialog.dart';
 import 'ink.dart';
 import 'look_picker.dart';
@@ -11,6 +12,7 @@ import 'template_picker.dart';
 import 'page_flip.dart';
 import 'paper_page.dart';
 import 'search_dialog.dart';
+import 'section_lock.dart';
 import 'section_tabs.dart';
 import 'store_scope.dart';
 import 'theme.dart';
@@ -133,7 +135,7 @@ class _TopBar extends StatelessWidget {
           const _MoreMenu(),
           const _DrawButton(),
           const SizedBox(width: 4),
-          _ArchiveButton(count: store.archive.length),
+          _ArchiveButton(count: store.archive.where((a) => !store.isArchiveLocked(a)).length),
           if (spread && !narrow)
             Padding(
               padding: const EdgeInsets.only(left: 4),
@@ -320,7 +322,14 @@ class _Book extends StatelessWidget {
       );
     }
 
-    final pages = FlippingBook(spread: spread, controller: flip, buildPage: buildPage);
+    // A locked section shows one closed sheet until its PIN is typed.
+    final Widget pages = store.isLocked(section)
+        ? SizedBox(
+            width: spread ? pageWidth * 2 + spineWidth : pageWidth,
+            height: pageHeight,
+            child: LockedSheet(section: section),
+          )
+        : FlippingBook(spread: spread, controller: flip, buildPage: buildPage);
 
     // Plain paper: the pages fill the screen, with the sections along the top.
     if (Paper.plain) {
@@ -383,6 +392,7 @@ class _PageBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
+    if (store.isLocked(store.section)) return const SizedBox(height: 48);
     final first = store.pageIndex == 0;
     final last = store.pageIndex == store.section.pages.length - 1;
     return Padding(

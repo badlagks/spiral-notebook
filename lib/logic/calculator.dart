@@ -5,8 +5,7 @@ import 'formula.dart';
 /// A pocket calculator that works like the real thing: each operator
 /// applies to the running total as you go (12 + 3 × 2 = 30).
 class CalculatorEngine {
-  CalculatorEngine({String display = '0', this.memory = 0})
-      : _entry = display.replaceAll(',', '');
+  CalculatorEngine({String display = '0', this.memory = 0}) : _entry = display.replaceAll(',', '');
 
   String _entry;
   double? _accumulator;

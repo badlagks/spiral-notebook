@@ -7,10 +7,8 @@ import 'theme.dart';
 
 /// Every page of a section as small pictures, or every favourite page in the
 /// notebook. Tap one to open it; tap its star to make it a favourite.
-Future<void> showPageOverview(BuildContext context) => showDialog<void>(
-      context: context,
-      builder: (_) => const _Overview(),
-    );
+Future<void> showPageOverview(BuildContext context) =>
+    showDialog<void>(context: context, builder: (_) => const _Overview());
 
 class _Overview extends StatefulWidget {
   const _Overview();
@@ -28,9 +26,12 @@ class _OverviewState extends State<_Overview> {
     final entries = _favourites
         ? [
             for (var s = 0; s < store.sections.length; s++)
-              for (var p = 0; p < store.sections[s].pages.length; p++)
-                if (store.sections[s].pages[p].starred) (s, p),
+              if (!store.isLocked(store.sections[s]))
+                for (var p = 0; p < store.sections[s].pages.length; p++)
+                  if (store.sections[s].pages[p].starred) (s, p),
           ]
+        : store.isLocked(store.section)
+        ? <(int, int)>[]
         : [for (var p = 0; p < store.section.pages.length; p++) (store.sectionIndex, p)];
 
     return Dialog.fullscreen(
@@ -70,7 +71,9 @@ class _OverviewState extends State<_Overview> {
                   Padding(
                     padding: const EdgeInsets.only(right: 6),
                     child: FilterChip(
-                      avatar: CircleAvatar(backgroundColor: Color(store.sections[i].color), radius: 6),
+                      avatar: store.isLocked(store.sections[i])
+                          ? const Icon(Icons.lock_outline, size: 16)
+                          : CircleAvatar(backgroundColor: Color(store.sections[i].color), radius: 6),
                       label: Text(store.sections[i].name),
                       selected: !_favourites && i == store.sectionIndex,
                       showCheckmark: false,
@@ -87,7 +90,11 @@ class _OverviewState extends State<_Overview> {
             child: entries.isEmpty
                 ? Center(
                     child: Text(
-                      _favourites ? 'No favourites yet. Tap the star on a page to add it.' : 'No pages yet.',
+                      _favourites
+                          ? 'No favourites yet. Tap the star on a page to add it.'
+                          : store.isLocked(store.section)
+                          ? 'This section is locked. Close this and unlock it to see its pages.'
+                          : 'No pages yet.',
                       style: const TextStyle(color: Color(0xFF666666)),
                     ),
                   )
@@ -163,7 +170,10 @@ class _Thumb extends StatelessWidget {
                   Positioned.fill(
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        border: Border.all(color: current ? Pen.blue : const Color(0x22000000), width: current ? 2.5 : 1),
+                        border: Border.all(
+                          color: current ? Pen.blue : const Color(0x22000000),
+                          width: current ? 2.5 : 1,
+                        ),
                         boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 4, offset: Offset(0, 2))],
                       ),
                       child: ClipRect(
@@ -197,7 +207,12 @@ class _Thumb extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
           Text(
             showSection ? '${section.name} · page $number' : 'Page $number',
             style: const TextStyle(fontSize: 12, color: Color(0xFF666666)),

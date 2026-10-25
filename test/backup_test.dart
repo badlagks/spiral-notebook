@@ -12,7 +12,8 @@ import 'package:spiral_notebook/main.dart';
 import 'package:spiral_notebook/models/notebook.dart';
 
 final tinyPng = base64Decode(
-    'iVBORw0KGgoAAAANSUhEUgAAAAQAAAACCAIAAADwyuo0AAAAEElEQVR4nGP43+AARwzIHAC7qg35WYGkRwAAAABJRU5ErkJggg==');
+  'iVBORw0KGgoAAAANSUhEUgAAAAQAAAACCAIAAADwyuo0AAAAEElEQVR4nGP43+AARwzIHAC7qg35WYGkRwAAAABJRU5ErkJggg==',
+);
 
 /// Keeps "saved" files in memory and hands back [toOpen] when asked to open one.
 class FakeFiles extends FileIO {
@@ -67,7 +68,12 @@ void main() {
     final back = NotePage.fromJson(jsonDecode(jsonEncode(p.toJson())) as Map<String, dynamic>);
     expect(back.background, 'bg1');
     expect(back.starred, isTrue);
-    final nb = Notebook(title: 't', sections: [Section(name: 'A', color: 0, pages: [p])]);
+    final nb = Notebook(
+      title: 't',
+      sections: [
+        Section(name: 'A', color: 0, pages: [p]),
+      ],
+    );
     expect(nb.mediaIds, contains('bg1'));
   });
 

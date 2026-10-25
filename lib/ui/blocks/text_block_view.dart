@@ -33,9 +33,7 @@ class _TextBlockViewState extends State<TextBlockView> {
   @override
   Widget build(BuildContext context) {
     final block = widget.block;
-    final style = block.kind == TextKind.heading
-        ? headingHandwriting.copyWith(fontSize: 28)
-        : handwriting;
+    final style = block.kind == TextKind.heading ? headingHandwriting.copyWith(fontSize: 28) : handwriting;
     final field = TextField(
       controller: _controller,
       autofocus: widget.autofocus,
@@ -46,11 +44,11 @@ class _TextBlockViewState extends State<TextBlockView> {
         hintText: block.kind == TextKind.heading
             ? 'Heading'
             : block.highlight
-                ? 'Highlight'
-                // Narrow boxes (like in templates) get the short hint.
-                : block.width < 340
-                    ? 'Write here…'
-                    : 'Write here… start a line with "- " for an outline',
+            ? 'Highlight'
+            // Narrow boxes (like in templates) get the short hint.
+            : block.width < 340
+            ? 'Write here…'
+            : 'Write here… start a line with "- " for an outline',
         hintStyle: style.copyWith(color: Pen.pencil.withValues(alpha: 0.45)),
       ),
       onChanged: (text) {
@@ -62,31 +60,33 @@ class _TextBlockViewState extends State<TextBlockView> {
     );
     if (!block.highlight) return field;
     // A highlighter stroke: translucent, a little uneven, hugging the text.
-    return LayoutBuilder(builder: (context, constraints) {
-      final painter = TextPainter(
-        text: TextSpan(text: _controller.text.isEmpty ? 'Highlight' : _controller.text, style: style),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      final width = (painter.width + 24).clamp(60.0, constraints.maxWidth);
-      painter.dispose();
-      return Align(
-        alignment: Alignment.centerLeft,
-        child: Container(
-          width: width,
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          decoration: const BoxDecoration(
-            color: Pen.highlighter,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(3),
-              topRight: Radius.circular(8),
-              bottomLeft: Radius.circular(8),
-              bottomRight: Radius.circular(3),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final painter = TextPainter(
+          text: TextSpan(text: _controller.text.isEmpty ? 'Highlight' : _controller.text, style: style),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        final width = (painter.width + 24).clamp(60.0, constraints.maxWidth);
+        painter.dispose();
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            width: width,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: const BoxDecoration(
+              color: Pen.highlighter,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(3),
+                topRight: Radius.circular(8),
+                bottomLeft: Radius.circular(8),
+                bottomRight: Radius.circular(3),
+              ),
             ),
+            child: field,
           ),
-          child: field,
-        ),
-      );
-    });
+        );
+      },
+    );
   }
 }
 
@@ -98,7 +98,8 @@ class OutlineContinuationFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
     final sel = newValue.selection;
-    final insertedNewline = newValue.text.length == oldValue.text.length + 1 &&
+    final insertedNewline =
+        newValue.text.length == oldValue.text.length + 1 &&
         sel.isCollapsed &&
         sel.baseOffset > 0 &&
         newValue.text[sel.baseOffset - 1] == '\n';

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/sample_notebook.dart';
 import '../models/notebook.dart';
+import 'section_lock.dart';
 import 'store_scope.dart';
 import 'theme.dart';
 
@@ -108,14 +109,24 @@ class _Chip extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
               child: Center(
                 widthFactor: 1,
-                child: Text(
-                  section.name,
-                  style: TextStyle(
-                    fontFamily: 'Kalam',
-                    fontSize: 15,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-                    color: const Color(0xFF2B2B2B),
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (section.lock != null)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 4),
+                        child: Icon(Icons.lock_outline, size: 14, color: Color(0xFF2B2B2B)),
+                      ),
+                    Text(
+                      section.name,
+                      style: TextStyle(
+                        fontFamily: 'Kalam',
+                        fontSize: 15,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                        color: const Color(0xFF2B2B2B),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -162,10 +173,7 @@ class _Tab extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
-              colors: [
-                Color.lerp(color, Colors.black, selected ? 0.0 : 0.12)!,
-                Color.lerp(color, Colors.white, 0.2)!,
-              ],
+              colors: [Color.lerp(color, Colors.black, selected ? 0.0 : 0.12)!, Color.lerp(color, Colors.white, 0.2)!],
             ),
             boxShadow: [
               BoxShadow(
@@ -178,16 +186,28 @@ class _Tab extends StatelessWidget {
           child: RotatedBox(
             quarterTurns: 1,
             child: Center(
-              child: Text(
-                section.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: 'Kalam',
-                  fontSize: 15,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-                  color: const Color(0xFF2B2B2B),
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (section.lock != null)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 4),
+                      child: Icon(Icons.lock_outline, size: 14, color: Color(0xFF2B2B2B)),
+                    ),
+                  Flexible(
+                    child: Text(
+                      section.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Kalam',
+                        fontSize: 15,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                        color: const Color(0xFF2B2B2B),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -200,6 +220,10 @@ class _Tab extends StatelessWidget {
 /// Opens a dialog to create a section, or rename, recolor or remove one.
 Future<void> showSectionEditor(BuildContext context, Section? section) async {
   final store = StoreScope.read(context);
+  // A locked section is opened before anyone can rename, unlock or delete it.
+  if (section != null && store.isLocked(section)) {
+    if (!await unlockSection(context, section) || !context.mounted) return;
+  }
   final name = TextEditingController(text: section?.name ?? '');
   var color = section?.color ?? tabColors[store.sections.length % tabColors.length];
 
@@ -233,14 +257,35 @@ Future<void> showSectionEditor(BuildContext context, Section? section) async {
                   ),
               ],
             ),
+            if (section != null) ...[
+              const SizedBox(height: 12),
+              if (section.lock == null)
+                TextButton.icon(
+                  onPressed: () => Navigator.pop(c, 'lock'),
+                  icon: const Icon(Icons.lock_outline),
+                  label: const Text('Lock with a PIN'),
+                )
+              else
+                Wrap(
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => Navigator.pop(c, 'lock'),
+                      icon: const Icon(Icons.password),
+                      label: const Text('Change PIN'),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => Navigator.pop(c, 'unlock'),
+                      icon: const Icon(Icons.lock_open),
+                      label: const Text('Remove lock'),
+                    ),
+                  ],
+                ),
+            ],
           ],
         ),
         actions: [
           if (section != null && store.sections.length > 1)
-            TextButton(
-              onPressed: () => Navigator.pop(c, 'delete'),
-              child: const Text('Delete section'),
-            ),
+            TextButton(onPressed: () => Navigator.pop(c, 'delete'), child: const Text('Delete section')),
           TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(c, 'save'), child: const Text('Save')),
         ],
@@ -248,13 +293,20 @@ Future<void> showSectionEditor(BuildContext context, Section? section) async {
     ),
   );
   final text = name.text.trim();
-  name.dispose();
   if (result == 'save' && text.isNotEmpty) {
     if (section == null) {
       store.addSection(text, color);
     } else {
       store.renameSection(section, text, color);
     }
+  } else if (result == 'lock' && section != null && context.mounted) {
+    final pin = await askNewPin(
+      context,
+      title: section.lock == null ? 'Lock "${section.name}"' : 'New PIN for "${section.name}"',
+    );
+    if (pin != null) store.setPin(section, pin);
+  } else if (result == 'unlock' && section != null) {
+    store.setPin(section, null);
   } else if (result == 'delete' && section != null && context.mounted) {
     final ok = await showDialog<bool>(
       context: context,

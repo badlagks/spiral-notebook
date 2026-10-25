@@ -10,16 +10,18 @@ import '../models/notebook.dart';
 Future<Uint8List> picturesToPdf(List<Uint8List> pngs) async {
   final doc = pw.Document(title: 'Notebook pages');
   for (final png in pngs) {
-    doc.addPage(pw.Page(
-      pageFormat: const PdfPageFormat(pageWidth, pageHeight),
-      margin: pw.EdgeInsets.zero,
-      build: (_) => pw.Image(pw.MemoryImage(png), fit: pw.BoxFit.fill),
-    ));
+    doc.addPage(
+      pw.Page(
+        pageFormat: const PdfPageFormat(pageWidth, pageHeight),
+        margin: pw.EdgeInsets.zero,
+        build: (_) => pw.Image(pw.MemoryImage(png), fit: pw.BoxFit.fill),
+      ),
+    );
   }
   return doc.save();
 }
 
 /// Each page of a PDF as a PNG picture, ready to write on.
 Future<List<Uint8List>> pdfToPictures(Uint8List pdf) async => [
-      await for (final page in Printing.raster(pdf, dpi: 150)) await page.toPng(),
-    ];
+  await for (final page in Printing.raster(pdf, dpi: 150)) await page.toPng(),
+];

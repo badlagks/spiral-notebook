@@ -38,8 +38,7 @@ class _SheetViewState extends State<SheetView> {
     _formula.text = _raw;
   }
 
-  String get _raw =>
-      _row < _sheet.rows && _col < _sheet.cols ? _sheet.cells[_row][_col] : '';
+  String get _raw => _row < _sheet.rows && _col < _sheet.cols ? _sheet.cells[_row][_col] : '';
 
   void _select(int row, int col, {bool focus = true}) {
     setState(() {
@@ -76,23 +75,17 @@ class _SheetViewState extends State<SheetView> {
 
     // Drawn at its natural size; the page scales it to the width it was given.
     return Container(
-          width: width + 2,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: const Color(0xFFB5BBC4)),
-            boxShadow: const [
-              BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(1, 3)),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _formulaBar(width),
-              _headerRow(),
-              for (var r = 0; r < _sheet.rows; r++) _dataRow(r, eval),
-            ],
-          ),
-        );
+      width: width + 2,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFB5BBC4)),
+        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(1, 3))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [_formulaBar(width), _headerRow(), for (var r = 0; r < _sheet.rows; r++) _dataRow(r, eval)],
+      ),
+    );
   }
 
   Widget _formulaBar(double width) {
@@ -116,7 +109,15 @@ class _SheetViewState extends State<SheetView> {
           ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 6),
-            child: Text('fx', style: TextStyle(fontFamily: 'Roboto', fontStyle: FontStyle.italic, fontSize: 13, color: Color(0xFF666666))),
+            child: Text(
+              'fx',
+              style: TextStyle(
+                fontFamily: 'Roboto',
+                fontStyle: FontStyle.italic,
+                fontSize: 13,
+                color: Color(0xFF666666),
+              ),
+            ),
           ),
           Expanded(
             child: TextField(
@@ -138,39 +139,38 @@ class _SheetViewState extends State<SheetView> {
   }
 
   Widget _tinyButton(IconData icon, String tip, VoidCallback onTap) => Tooltip(
-        message: tip,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(3),
-            child: Icon(icon, size: 15, color: const Color(0xFF555555)),
-          ),
-        ),
-      );
+    message: tip,
+    child: InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(3),
+        child: Icon(icon, size: 15, color: const Color(0xFF555555)),
+      ),
+    ),
+  );
 
   Widget _headerRow() {
     return Row(
       children: [
         _headerCell('', _rowHeaderWidth),
-        for (var c = 0; c < _sheet.cols; c++)
-          _headerCell(columnName(c), _widthOf(c), active: c == _col),
+        for (var c = 0; c < _sheet.cols; c++) _headerCell(columnName(c), _widthOf(c), active: c == _col),
       ],
     );
   }
 
   Widget _headerCell(String text, double width, {bool active = false}) => Container(
-        width: width,
-        height: _cellHeight - 2,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: active ? const Color(0xFFDDE6F5) : _headerFill,
-          border: const Border(
-            right: BorderSide(color: _border),
-            bottom: BorderSide(color: _border),
-          ),
-        ),
-        child: Text(text, style: _uiText.copyWith(color: const Color(0xFF555555), fontSize: 11.5)),
-      );
+    width: width,
+    height: _cellHeight - 2,
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      color: active ? const Color(0xFFDDE6F5) : _headerFill,
+      border: const Border(
+        right: BorderSide(color: _border),
+        bottom: BorderSide(color: _border),
+      ),
+    ),
+    child: Text(text, style: _uiText.copyWith(color: const Color(0xFF555555), fontSize: 11.5)),
+  );
 
   Widget _dataRow(int r, SheetEvaluator eval) {
     return Row(

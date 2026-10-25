@@ -18,7 +18,8 @@ class _ArchiveDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
     final now = DateTime.now();
-    final pages = store.archive;
+    // Pages from locked sections stay out of sight until it's opened.
+    final pages = store.archive.where((a) => !store.isArchiveLocked(a)).toList();
     return Dialog(
       insetPadding: const EdgeInsets.all(16),
       backgroundColor: const Color(0xFFF6F1E4),

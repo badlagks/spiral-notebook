@@ -70,8 +70,7 @@ class _PaperPageState extends State<PaperPage> {
   }
 
   /// Converts a screen position to paper units on this page.
-  Offset _toPaper(Offset global) =>
-      (_canvasKey.currentContext!.findRenderObject()! as RenderBox).globalToLocal(global);
+  Offset _toPaper(Offset global) => (_canvasKey.currentContext!.findRenderObject()! as RenderBox).globalToLocal(global);
 
   Future<void> _openGallery() async {
     final block = await showWidgetGallery(context);
@@ -158,20 +157,22 @@ class _PaperPageState extends State<PaperPage> {
                 child: blockContent(block, autofocus: block.id == _justAdded),
               ),
             // Drawing sits above the widgets, like ink on top of the paper.
-            Positioned.fill(child: InkLayer(page: _page, interactive: widget.interactive)),
+            Positioned.fill(
+              child: InkLayer(page: _page, interactive: widget.interactive),
+            ),
             if (widget.pageNumber > 0)
               Positioned(
-              left: 0,
-              right: 0,
-              bottom: 14,
-              child: IgnorePointer(
-                child: Text(
-                  '${widget.pageNumber}',
-                  textAlign: TextAlign.center,
-                  style: headingHandwriting.copyWith(fontSize: 20, fontWeight: FontWeight.w400, color: Pen.pencil),
+                left: 0,
+                right: 0,
+                bottom: 14,
+                child: IgnorePointer(
+                  child: Text(
+                    '${widget.pageNumber}',
+                    textAlign: TextAlign.center,
+                    style: headingHandwriting.copyWith(fontSize: 20, fontWeight: FontWeight.w400, color: Pen.pencil),
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -184,7 +185,10 @@ class _PaperPageState extends State<PaperPage> {
     if (_exporting) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [Text(_page.title, style: headingHandwriting), if (_page.title.isNotEmpty) _titleUnderline()],
+        children: [
+          Text(_page.title, style: headingHandwriting),
+          if (_page.title.isNotEmpty) _titleUnderline(),
+        ],
       );
     }
     return Row(
@@ -266,10 +270,12 @@ class _PaperPageState extends State<PaperPage> {
             _saveAsPdf();
           case 'tear':
             final archived = store.tearOut(widget.section, _page);
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: const Text('Page torn out. It stays in Torn-out pages for 30 days.'),
-              action: SnackBarAction(label: 'Undo', onPressed: () => store.restore(archived)),
-            ));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Page torn out. It stays in Torn-out pages for 30 days.'),
+                action: SnackBarAction(label: 'Undo', onPressed: () => store.restore(archived)),
+              ),
+            );
         }
       },
       itemBuilder: (_) => [
@@ -375,10 +381,7 @@ class _PlacedBlockState extends State<_PlacedBlock> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(_side, _handleRoom, _side, _side),
-                child: Listener(
-                  onPointerDown: (_) => widget.onSelect(),
-                  child: widget.child,
-                ),
+                child: Listener(onPointerDown: (_) => widget.onSelect(), child: widget.child),
               ),
               if (widget.selected)
                 Positioned.fill(

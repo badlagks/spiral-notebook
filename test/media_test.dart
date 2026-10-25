@@ -13,7 +13,8 @@ import 'package:spiral_notebook/ui/blocks/media_view.dart';
 
 /// A 4×2 pixel PNG.
 final tinyPng = base64Decode(
-    'iVBORw0KGgoAAAANSUhEUgAAAAQAAAACCAIAAADwyuo0AAAAEElEQVR4nGP43+AARwzIHAC7qg35WYGkRwAAAABJRU5ErkJggg==');
+  'iVBORw0KGgoAAAANSUhEUgAAAAQAAAACCAIAAADwyuo0AAAAEElEQVR4nGP43+AARwzIHAC7qg35WYGkRwAAAABJRU5ErkJggg==',
+);
 
 class FakePicker extends MediaPicker {
   const FakePicker();
@@ -30,15 +31,16 @@ void main() {
   });
 
   test('a photo widget saves its note, place and to-dos', () {
-    final b = MediaBlock(
-      mediaId: 'm1',
-      aspect: 1.5,
-      note: 'Cabin',
-      place: 'Tahoe',
-      todos: ChecklistBlock(items: [ChecklistItem(text: 'Print it', done: true)]),
-    )
-      ..x = 10
-      ..y = 20;
+    final b =
+        MediaBlock(
+            mediaId: 'm1',
+            aspect: 1.5,
+            note: 'Cabin',
+            place: 'Tahoe',
+            todos: ChecklistBlock(items: [ChecklistItem(text: 'Print it', done: true)]),
+          )
+          ..x = 10
+          ..y = 20;
     final back = Block.fromJson(jsonDecode(jsonEncode(b.toJson())) as Map<String, dynamic>) as MediaBlock;
     expect(back.mediaId, 'm1');
     expect(back.aspect, 1.5);
@@ -55,13 +57,15 @@ void main() {
   test('unused photos are tidied away, photos on torn-out pages are kept', () async {
     final nb = sampleNotebook();
     nb.sections.first.pages.first.blocks.add(MediaBlock(mediaId: 'kept'));
-    nb.archive.add(ArchivedPage(
-      page: NotePage(blocks: [MediaBlock(mediaId: 'torn')]),
-      sectionId: 's',
-      sectionName: 'Ideas',
-      sectionColor: 0,
-      tornAt: DateTime.now(),
-    ));
+    nb.archive.add(
+      ArchivedPage(
+        page: NotePage(blocks: [MediaBlock(mediaId: 'torn')]),
+        sectionId: 's',
+        sectionName: 'Ideas',
+        sectionColor: 0,
+        tornAt: DateTime.now(),
+      ),
+    );
     for (final id in ['kept', 'torn', 'gone']) {
       await mediaStore.put(id, tinyPng, mime: 'image/png');
     }
@@ -89,7 +93,10 @@ void main() {
     expect(find.text('Add to page'), findsNothing);
     await tester.tap(find.text('Choose photo'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.descendant(of: find.byType(Dialog), matching: find.byType(TextField)).first, 'Our cabin');
+    await tester.enterText(
+      find.descendant(of: find.byType(Dialog), matching: find.byType(TextField)).first,
+      'Our cabin',
+    );
     await tester.tap(find.text('Add to page'));
     await tester.pumpAndSettle();
 

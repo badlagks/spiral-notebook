@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'data/notebook_store.dart';
 import 'ui/ink.dart';
 import 'ui/notebook_screen.dart';
+import 'ui/section_lock.dart';
 import 'ui/store_scope.dart';
 import 'ui/theme.dart';
 
@@ -35,6 +36,11 @@ class _NotebookAppState extends State<NotebookApp> with WidgetsBindingObserver {
     // Don't lose the last few keystrokes when the app is backgrounded or closed.
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       widget.store.saveNow();
+    }
+    // Locked sections close again once the app is put away, but not when
+    // only the face or fingerprint prompt is covering it.
+    if ((state == AppLifecycleState.paused || state == AppLifecycleState.hidden) && !deviceCheckShowing) {
+      widget.store.lockAll();
     }
   }
 

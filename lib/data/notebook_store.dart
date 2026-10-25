@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -21,6 +22,7 @@ class NotebookStore extends ChangeNotifier {
   final Notebook notebook;
   final SharedPreferences? _prefs;
   Timer? _saveTimer;
+
   /// Kept separate from the notebook so the save badge can update
   /// without rebuilding the pages.
   final saveState = ValueNotifier(SaveState.saved);
@@ -37,6 +39,51 @@ class NotebookStore extends ChangeNotifier {
 
   int _sectionIndex = 0;
   int _pageIndex = 0;
+
+  /// Locked sections opened since the app was last put away. Never saved.
+  final _unlocked = <String>{};
+
+  static String _hash(String sectionId, String pin) =>
+      sha256.convert(utf8.encode('spiral-notebook:$sectionId:$pin')).toString();
+
+  bool _lockedId(String sectionId, String? lock) => lock != null && !_unlocked.contains(sectionId);
+
+  /// Whether [s] has a PIN and hasn't been opened with it yet.
+  bool isLocked(Section s) => _lockedId(s.id, s.lock);
+
+  /// Whether a torn-out page belongs to a section that is still locked.
+  bool isArchiveLocked(ArchivedPage a) {
+    final s = sections.where((s) => s.id == a.sectionId).firstOrNull;
+    return s != null ? isLocked(s) : _lockedId(a.sectionId, a.sectionLock);
+  }
+
+  /// Opens a locked section if [pin] is right.
+  bool unlock(Section s, String pin) {
+    if (s.lock != _hash(s.id, pin)) return false;
+    unlockTrusted(s);
+    return true;
+  }
+
+  /// Opens a locked section after the device checked a face or fingerprint.
+  void unlockTrusted(Section s) {
+    _unlocked.add(s.id);
+    notifyListeners();
+  }
+
+  /// Sets the section's PIN, or removes the lock when [pin] is null.
+  void setPin(Section s, String? pin) {
+    s.lock = pin == null ? null : _hash(s.id, pin);
+    // Whoever just set it stays in until the app is put away.
+    _unlocked.add(s.id);
+    changed();
+  }
+
+  /// Locks every locked section again, as when the app goes to the background.
+  void lockAll() {
+    if (_unlocked.isEmpty) return;
+    _unlocked.clear();
+    notifyListeners();
+  }
 
   static Future<NotebookStore> load() async {
     SharedPreferences? prefs;
@@ -56,9 +103,11 @@ class NotebookStore extends ChangeNotifier {
     // Photos and videos from erased widgets or long-gone pages. Only once
     // the notebook loaded, so a damaged save never costs anyone their photos.
     if (nb != null) {
-      unawaited(mediaStore.removeAllExcept(store.notebook.mediaIds).catchError((Object e) {
-        debugPrint('Could not tidy media: $e');
-      }));
+      unawaited(
+        mediaStore.removeAllExcept(store.notebook.mediaIds).catchError((Object e) {
+          debugPrint('Could not tidy media: $e');
+        }),
+      );
     }
     return store;
   }
@@ -152,6 +201,7 @@ class NotebookStore extends ChangeNotifier {
       sectionName: s.name,
       sectionColor: s.color,
       tornAt: when,
+      sectionLock: s.lock,
     );
     notebook.archive.insert(0, a);
     return a;
@@ -165,7 +215,7 @@ class NotebookStore extends ChangeNotifier {
     notebook.archive.remove(a);
     var target = sections.where((s) => s.id == a.sectionId).firstOrNull;
     if (target == null) {
-      target = Section(id: a.sectionId, name: a.sectionName, color: a.sectionColor, pages: []);
+      target = Section(id: a.sectionId, name: a.sectionName, color: a.sectionColor, pages: [], lock: a.sectionLock);
       sections.add(target);
     }
     // A blank placeholder page is replaced rather than kept in front.
@@ -204,6 +254,7 @@ class NotebookStore extends ChangeNotifier {
       ..addAll(nb.archive);
     _sectionIndex = 0;
     _pageIndex = 0;
+    _unlocked.clear();
     appearance.value = (notebook.look, notebook.tone);
     changed();
   }
@@ -290,17 +341,14 @@ class NotebookStore extends ChangeNotifier {
     final hits = <SearchHit>[];
     for (var s = 0; s < sections.length; s++) {
       final sec = sections[s];
+      if (isLocked(sec)) continue;
       for (var p = 0; p < sec.pages.length; p++) {
         final text = sec.pages[p].searchableText;
         final at = text.toLowerCase().indexOf(q);
         if (at < 0) continue;
         final start = (at - 30).clamp(0, text.length);
         final end = (at + q.length + 40).clamp(0, text.length);
-        hits.add(SearchHit(
-          sectionIndex: s,
-          pageIndex: p,
-          snippet: text.substring(start, end).replaceAll('\n', ' · '),
-        ));
+        hits.add(SearchHit(sectionIndex: s, pageIndex: p, snippet: text.substring(start, end).replaceAll('\n', ' · ')));
       }
     }
     return hits;

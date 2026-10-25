@@ -8,6 +8,7 @@ import 'package:spiral_notebook/models/notebook.dart';
 import 'package:spiral_notebook/ui/ink.dart';
 import 'package:spiral_notebook/ui/page_flip.dart';
 import 'package:spiral_notebook/ui/paper_page.dart';
+import 'package:spiral_notebook/ui/section_lock.dart';
 import 'package:spiral_notebook/ui/section_tabs.dart';
 import 'package:spiral_notebook/ui/blocks/calculator_view.dart';
 
@@ -15,6 +16,7 @@ Future<NotebookStore> pumpApp(WidgetTester tester, Size size) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
+  deviceUnlock = _FakeDeviceUnlock(hasSensor: false);
   final store = NotebookStore.memory(sampleNotebook());
   await tester.pumpWidget(NotebookApp(store: store));
   await tester.pumpAndSettle();
@@ -56,11 +58,9 @@ void main() {
 
   testWidgets('ticking a checklist item updates the notebook', (tester) async {
     final store = await pumpApp(tester, const Size(1400, 900));
-    final item = store.sections.first.pages[1].blocks
-        .whereType<ChecklistBlock>()
-        .first
-        .items
-        .firstWhere((i) => i.text == 'Salary');
+    final item = store.sections.first.pages[1].blocks.whereType<ChecklistBlock>().first.items.firstWhere(
+      (i) => i.text == 'Salary',
+    );
     expect(item.done, isFalse);
     await tester.tap(find.bySemanticsLabel('Salary'));
     await tester.pump();
@@ -329,4 +329,101 @@ void main() {
     await tester.pump();
     expect(page.strokes.single.points.first.x, closeTo(before, 0.01));
   });
+
+  testWidgets('a section can be locked with a PIN, and opens with it', (tester) async {
+    final store = await pumpApp(tester, const Size(1400, 900));
+    final ideas = store.sections.first;
+
+    // Lock it from the section editor.
+    await tester.longPress(find.text('Ideas').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lock with a PIN'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'New PIN'), '2468');
+    await tester.enterText(find.widgetWithText(TextField, 'Same PIN again'), '2468');
+    await tester.tap(find.text('Lock it'));
+    await tester.pumpAndSettle();
+    expect(ideas.lock, isNotNull);
+    expect(ideas.lock, isNot(contains('2468')));
+    // Whoever locked it is still in, until the app is put away.
+    expect(find.text('Draft Outline'), findsOneWidget);
+
+    store.lockAll();
+    await tester.pumpAndSettle();
+    expect(find.text('Draft Outline'), findsNothing);
+    expect(find.text('This section is locked.'), findsOneWidget);
+    expect(store.search('outline'), isEmpty);
+
+    // A wrong PIN, then the right one.
+    await tester.tap(find.text('Unlock'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'PIN'), '1111');
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    expect(find.text('That PIN is not right. Try again.'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, 'PIN'), '2468');
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    expect(find.text('Draft Outline'), findsOneWidget);
+    expect(store.search('outline'), isNotEmpty);
+
+    // The lock is saved with the notebook.
+    final copy = Notebook.fromJson(store.notebook.toJson());
+    expect(copy.sections.first.lock, ideas.lock);
+    final reloaded = NotebookStore.memory(copy);
+    expect(reloaded.isLocked(reloaded.sections.first), isTrue);
+    expect(reloaded.unlock(reloaded.sections.first, '2468'), isTrue);
+
+    // Removing the lock.
+    await tester.longPress(find.text('Ideas').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove lock'));
+    await tester.pumpAndSettle();
+    expect(ideas.lock, isNull);
+    store.lockAll();
+    await tester.pumpAndSettle();
+    expect(find.text('Draft Outline'), findsOneWidget);
+  });
+
+  testWidgets('a face or fingerprint opens a locked section, and torn pages stay hidden', (tester) async {
+    final store = await pumpApp(tester, const Size(1400, 900));
+    final fake = _FakeDeviceUnlock(hasSensor: true);
+    deviceUnlock = fake;
+    final ideas = store.sections.first;
+    store.tearOut(ideas, ideas.pages.first);
+    store.setPin(ideas, '2468');
+    store.lockAll();
+    await tester.pumpAndSettle();
+    expect(store.isArchiveLocked(store.archive.single), isTrue);
+
+    await tester.tap(find.byTooltip('Torn-out pages'));
+    await tester.pumpAndSettle();
+    expect(find.text('Restore'), findsNothing);
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Unlock'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Use face or fingerprint'));
+    await tester.pumpAndSettle();
+    expect(fake.asked, 1);
+    expect(store.isLocked(ideas), isFalse);
+    expect(store.isArchiveLocked(store.archive.single), isFalse);
+  });
+}
+
+class _FakeDeviceUnlock implements DeviceUnlock {
+  _FakeDeviceUnlock({required this.hasSensor});
+
+  final bool hasSensor;
+  int asked = 0;
+
+  @override
+  Future<bool> available() async => hasSensor;
+
+  @override
+  Future<bool> check(String reason) async {
+    asked++;
+    return true;
+  }
 }

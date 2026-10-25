@@ -9,8 +9,8 @@ import 'theme.dart';
 /// a red margin and a soft darkening toward the edges.
 class PaperPainter extends CustomPainter {
   PaperPainter({required this.style, required this.bindingOnLeft, this.headerHeight = 72})
-      : sheet = Paper.sheet,
-        aged = !Paper.plain;
+    : sheet = Paper.sheet,
+      aged = !Paper.plain;
 
   final PaperStyle style;
   final Color sheet;

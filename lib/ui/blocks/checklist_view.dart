@@ -23,15 +23,15 @@ class _ChecklistViewState extends State<ChecklistView> {
       _controllers.putIfAbsent(item.id, () => TextEditingController(text: item.text));
 
   FocusNode _focusFor(ChecklistItem item) => _focusNodes.putIfAbsent(item.id, () {
-        final node = FocusNode();
-        node.addListener(() {
-          // Leaving an empty item tidies it away.
-          if (!node.hasFocus && item.text.trim().isEmpty && widget.block.items.length > 1) {
-            _remove(item);
-          }
-        });
-        return node;
-      });
+    final node = FocusNode();
+    node.addListener(() {
+      // Leaving an empty item tidies it away.
+      if (!node.hasFocus && item.text.trim().isEmpty && widget.block.items.length > 1) {
+        _remove(item);
+      }
+    });
+    return node;
+  });
 
   void _remove(ChecklistItem item) {
     if (!widget.block.items.contains(item)) return;
@@ -98,7 +98,10 @@ class _ChecklistViewState extends State<ChecklistView> {
                   textInputAction: TextInputAction.next,
                   decoration: InputDecoration.collapsed(
                     hintText: 'To do…',
-                    hintStyle: handwriting.copyWith(fontSize: widget.fontSize, color: Pen.pencil.withValues(alpha: 0.45)),
+                    hintStyle: handwriting.copyWith(
+                      fontSize: widget.fontSize,
+                      color: Pen.pencil.withValues(alpha: 0.45),
+                    ),
                   ),
                   onChanged: (text) {
                     item.text = text;

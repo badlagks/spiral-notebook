@@ -37,12 +37,7 @@ abstract final class Chrome {
   static Color get faint => Paper.plain ? const Color(0x33000000) : Colors.white24;
 }
 
-const handwriting = TextStyle(
-  fontFamily: 'Kalam',
-  fontSize: 19,
-  height: 1.45,
-  color: Pen.blue,
-);
+const handwriting = TextStyle(fontFamily: 'Kalam', fontSize: 19, height: 1.45, color: Pen.blue);
 
 const headingHandwriting = TextStyle(
   fontFamily: 'Caveat',
@@ -56,17 +51,11 @@ ThemeData buildTheme() {
   final base = ThemeData(
     useMaterial3: true,
     fontFamily: 'Roboto',
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: Paper.cover,
-      brightness: Brightness.light,
-    ),
+    colorScheme: ColorScheme.fromSeed(seedColor: Paper.cover, brightness: Brightness.light),
   );
   return base.copyWith(
     scaffoldBackgroundColor: Paper.desk,
-    textSelectionTheme: const TextSelectionThemeData(
-      cursorColor: Pen.blue,
-      selectionColor: Color(0x553F72AF),
-    ),
+    textSelectionTheme: const TextSelectionThemeData(cursorColor: Pen.blue, selectionColor: Color(0x553F72AF)),
     tooltipTheme: const TooltipThemeData(waitDuration: Duration(milliseconds: 600)),
   );
 }

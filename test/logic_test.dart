@@ -14,10 +14,46 @@ String eval(List<List<String>> cells, int r, int c) => SheetEvaluator(cells).val
 void main() {
   group('spreadsheet formulas', () {
     test('arithmetic and precedence', () {
-      expect(eval([['=1+2*3']], 0, 0), '7');
-      expect(eval([['=(1+2)*3']], 0, 0), '9');
-      expect(eval([['=2^3^2']], 0, 0), '512');
-      expect(eval([['=-4+10/4']], 0, 0), '-1.5');
+      expect(
+        eval(
+          [
+            ['=1+2*3'],
+          ],
+          0,
+          0,
+        ),
+        '7',
+      );
+      expect(
+        eval(
+          [
+            ['=(1+2)*3'],
+          ],
+          0,
+          0,
+        ),
+        '9',
+      );
+      expect(
+        eval(
+          [
+            ['=2^3^2'],
+          ],
+          0,
+          0,
+        ),
+        '512',
+      );
+      expect(
+        eval(
+          [
+            ['=-4+10/4'],
+          ],
+          0,
+          0,
+        ),
+        '-1.5',
+      );
     });
 
     test('cell references and currency', () {
@@ -42,11 +78,56 @@ void main() {
     });
 
     test('errors', () {
-      expect(eval([['=A1']], 0, 0), '#CYCLE!');
-      expect(eval([['=1/0']], 0, 0), '#DIV/0!');
-      expect(eval([['=FOO(1)']], 0, 0), '#NAME?');
-      expect(eval([['=1+']], 0, 0), '#ERROR!');
-      expect(eval([['=1/0', '=A1+1']], 0, 1), '#DIV/0!');
+      expect(
+        eval(
+          [
+            ['=A1'],
+          ],
+          0,
+          0,
+        ),
+        '#CYCLE!',
+      );
+      expect(
+        eval(
+          [
+            ['=1/0'],
+          ],
+          0,
+          0,
+        ),
+        '#DIV/0!',
+      );
+      expect(
+        eval(
+          [
+            ['=FOO(1)'],
+          ],
+          0,
+          0,
+        ),
+        '#NAME?',
+      );
+      expect(
+        eval(
+          [
+            ['=1+'],
+          ],
+          0,
+          0,
+        ),
+        '#ERROR!',
+      );
+      expect(
+        eval(
+          [
+            ['=1/0', '=A1+1'],
+          ],
+          0,
+          1,
+        ),
+        '#DIV/0!',
+      );
     });
 
     test('loose numbers and formatting', () {
@@ -102,9 +183,15 @@ void main() {
 
   group('outline typing', () {
     TextEditingValue type(String before, String after) => OutlineContinuationFormatter().formatEditUpdate(
-          TextEditingValue(text: before, selection: TextSelection.collapsed(offset: before.length)),
-          TextEditingValue(text: after, selection: TextSelection.collapsed(offset: after.length)),
-        );
+      TextEditingValue(
+        text: before,
+        selection: TextSelection.collapsed(offset: before.length),
+      ),
+      TextEditingValue(
+        text: after,
+        selection: TextSelection.collapsed(offset: after.length),
+      ),
+    );
 
     test('continues a bullet at the same indent', () {
       final v = type('  - Plan', '  - Plan\n');
@@ -133,7 +220,13 @@ void main() {
 
   group('pages and archive', () {
     test('old notebooks without positions get stacked down the page', () {
-      final page = NotePage(blocks: [TextBlock(text: 'a'), ChecklistBlock(), CalculatorBlock()]);
+      final page = NotePage(
+        blocks: [
+          TextBlock(text: 'a'),
+          ChecklistBlock(),
+          CalculatorBlock(),
+        ],
+      );
       page.placeUnplaced();
       final ys = page.blocks.map((b) => b.y!).toList();
       expect(page.blocks.every((b) => b.isPlaced), isTrue);
@@ -181,10 +274,12 @@ void main() {
 
   group('ink', () {
     test('a stroke survives a save and load, rounded small', () {
-      final s = InkStroke(tool: InkTool.highlighter, color: 0xFFFFEB3B, width: 13, points: [
-        const InkPoint(10.04, 20.06, 0.333),
-        const InkPoint(30, 40, 1),
-      ]);
+      final s = InkStroke(
+        tool: InkTool.highlighter,
+        color: 0xFFFFEB3B,
+        width: 13,
+        points: [const InkPoint(10.04, 20.06, 0.333), const InkPoint(30, 40, 1)],
+      );
       final copy = InkStroke.fromJson(jsonDecode(jsonEncode(s.toJson())) as Map<String, dynamic>);
       expect(copy.tool, InkTool.highlighter);
       expect(copy.points.first.x, 10.0);
@@ -194,7 +289,12 @@ void main() {
     });
 
     test('the eraser finds lines it touches', () {
-      final s = InkStroke(tool: InkTool.pen, color: 0, width: 2, points: [const InkPoint(0, 0), const InkPoint(100, 0)]);
+      final s = InkStroke(
+        tool: InkTool.pen,
+        color: 0,
+        width: 2,
+        points: [const InkPoint(0, 0), const InkPoint(100, 0)],
+      );
       expect(s.passesNear(50, 5, 4), isTrue);
       expect(s.passesNear(50, 20, 4), isFalse);
       expect(s.passesNear(120, 0, 4), isFalse);

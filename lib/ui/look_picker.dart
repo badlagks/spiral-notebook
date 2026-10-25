@@ -6,10 +6,8 @@ import 'store_scope.dart';
 import 'theme.dart';
 
 /// Lets the person choose the spiral notebook or plain paper, in cream or white.
-Future<void> showLookPicker(BuildContext context) => showDialog<void>(
-      context: context,
-      builder: (_) => const _LookDialog(),
-    );
+Future<void> showLookPicker(BuildContext context) =>
+    showDialog<void>(context: context, builder: (_) => const _LookDialog());
 
 class _LookDialog extends StatefulWidget {
   const _LookDialog();
@@ -124,7 +122,9 @@ class _Choice extends StatelessWidget {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600))),
+                    Expanded(
+                      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    ),
                     if (selected) const Icon(Icons.check_circle, size: 18, color: Pen.blue),
                   ],
                 ),
@@ -148,9 +148,9 @@ class _Preview extends StatelessWidget {
   Widget build(BuildContext context) {
     final sheet = tone == PaperTone.white ? Paper.white : Paper.cream;
     Widget page() => DecoratedBox(
-          decoration: BoxDecoration(color: sheet),
-          child: look == Look.notebook ? const CustomPaint(painter: _MiniLines()) : null,
-        );
+      decoration: BoxDecoration(color: sheet),
+      child: look == Look.notebook ? const CustomPaint(painter: _MiniLines()) : null,
+    );
     if (look == Look.plain) {
       return DecoratedBox(
         decoration: BoxDecoration(
@@ -176,7 +176,10 @@ class _Preview extends StatelessWidget {
             Expanded(child: page()),
             const SizedBox(
               width: 12,
-              child: ColoredBox(color: Color(0xFFE9DFC8), child: CustomPaint(painter: SpiralPainter(ringSpacing: 8))),
+              child: ColoredBox(
+                color: Color(0xFFE9DFC8),
+                child: CustomPaint(painter: SpiralPainter(ringSpacing: 8)),
+              ),
             ),
             Expanded(child: page()),
           ],

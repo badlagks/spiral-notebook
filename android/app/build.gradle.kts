@@ -47,3 +47,8 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // The AppCompat theme the fingerprint prompt needs on older Android.
+    implementation("androidx.appcompat:appcompat:1.7.0")
+}

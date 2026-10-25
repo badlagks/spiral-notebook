@@ -1,5 +1,6 @@
 package com.mrwritesforfun.spiral_notebook
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// A FragmentActivity so the fingerprint and face unlock prompt can show.
+class MainActivity : FlutterFragmentActivity()

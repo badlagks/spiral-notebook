@@ -16,7 +16,7 @@ enum PaperStyle { ruled, grid, blank }
 
 /// A colored tab down the edge of the notebook, holding its own pages.
 class Section {
-  Section({String? id, required this.name, required this.color, List<NotePage>? pages})
+  Section({String? id, required this.name, required this.color, List<NotePage>? pages, this.lock})
     : id = id ?? newId(),
       pages = pages ?? [NotePage()];
 
@@ -25,10 +25,14 @@ class Section {
   int color; // ARGB
   final List<NotePage> pages;
 
+  /// A hash of the section's PIN, or null when it isn't locked.
+  String? lock;
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
     'color': color,
+    if (lock != null) 'lock': lock,
     'pages': pages.map((p) => p.toJson()).toList(),
   };
 
@@ -36,6 +40,7 @@ class Section {
     id: j['id'] as String,
     name: j['name'] as String,
     color: j['color'] as int,
+    lock: j['lock'] as String?,
     pages: (j['pages'] as List).map((p) => NotePage.fromJson(p as Map<String, dynamic>)).toList(),
   );
 }
@@ -548,6 +553,7 @@ class ArchivedPage {
     required this.sectionName,
     required this.sectionColor,
     required this.tornAt,
+    this.sectionLock,
   });
 
   static const keepFor = Duration(days: 30);
@@ -557,6 +563,9 @@ class ArchivedPage {
   final String sectionName;
   final int sectionColor;
   final DateTime tornAt;
+
+  /// The PIN hash of a locked section, so its torn-out pages stay hidden too.
+  final String? sectionLock;
 
   DateTime get deleteAt => tornAt.add(keepFor);
 
@@ -572,6 +581,7 @@ class ArchivedPage {
     'sectionName': sectionName,
     'sectionColor': sectionColor,
     'tornAt': tornAt.toUtc().toIso8601String(),
+    if (sectionLock != null) 'sectionLock': sectionLock,
   };
 
   factory ArchivedPage.fromJson(Map<String, dynamic> j) => ArchivedPage(
@@ -580,6 +590,7 @@ class ArchivedPage {
     sectionName: j['sectionName'] as String,
     sectionColor: j['sectionColor'] as int,
     tornAt: DateTime.parse(j['tornAt'] as String),
+    sectionLock: j['sectionLock'] as String?,
   );
 }
 

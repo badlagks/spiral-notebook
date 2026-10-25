@@ -39,9 +39,7 @@ class _StickyViewState extends State<StickyView> {
       constraints: BoxConstraints(minHeight: widget.block.width * 0.85),
       decoration: BoxDecoration(
         color: color,
-        boxShadow: const [
-          BoxShadow(color: Color(0x40000000), blurRadius: 6, offset: Offset(2, 4)),
-        ],
+        boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 6, offset: Offset(2, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

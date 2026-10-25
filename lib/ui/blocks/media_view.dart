@@ -94,8 +94,7 @@ class _MediaViewState extends State<MediaView> {
               ),
             ],
           ),
-          if (b.todos.items.isNotEmpty)
-            ChecklistView(block: b.todos, fontSize: 16),
+          if (b.todos.items.isNotEmpty) ChecklistView(block: b.todos, fontSize: 16),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
@@ -239,13 +238,13 @@ class _PlayBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: const BoxDecoration(color: Color(0x99000000), shape: BoxShape.circle),
-          child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 30),
-        ),
-      );
+    child: Container(
+      width: 44,
+      height: 44,
+      decoration: const BoxDecoration(color: Color(0x99000000), shape: BoxShape.circle),
+      child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 30),
+    ),
+  );
 }
 
 class _Missing extends StatelessWidget {
@@ -255,13 +254,13 @@ class _Missing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ColoredBox(
-        color: const Color(0xFFE8E2D4),
-        child: Center(
-          child: loading
-              ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
-              : Icon(icon, color: Pen.pencil),
-        ),
-      );
+    color: const Color(0xFFE8E2D4),
+    child: Center(
+      child: loading
+          ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
+          : Icon(icon, color: Pen.pencil),
+    ),
+  );
 }
 
 /// A little painted landscape that stands in for a photo in previews.
@@ -271,12 +270,12 @@ class _SamplePicture extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Stack(
-        fit: StackFit.expand,
-        children: [
-          const CustomPaint(painter: _LandscapePainter()),
-          if (video) const _PlayBadge(),
-        ],
-      );
+    fit: StackFit.expand,
+    children: [
+      const CustomPaint(painter: _LandscapePainter()),
+      if (video) const _PlayBadge(),
+    ],
+  );
 }
 
 class _LandscapePainter extends CustomPainter {

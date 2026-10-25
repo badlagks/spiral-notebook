@@ -51,10 +51,7 @@ class _SearchDialogState extends State<_SearchDialog> {
               ),
             ),
             if (_query.trim().isNotEmpty && hits.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(20),
-                child: Text('Nothing found on any page.'),
-              ),
+              const Padding(padding: EdgeInsets.all(20), child: Text('Nothing found on any page.')),
             Flexible(
               child: ListView.builder(
                 shrinkWrap: true,
@@ -65,9 +62,7 @@ class _SearchDialogState extends State<_SearchDialog> {
                   final page = section.pages[hit.pageIndex];
                   return ListTile(
                     leading: CircleAvatar(radius: 6, backgroundColor: Color(section.color)),
-                    title: Text(
-                      '${section.name} · ${page.title.isEmpty ? 'Page ${hit.pageIndex + 1}' : page.title}',
-                    ),
+                    title: Text('${section.name} · ${page.title.isEmpty ? 'Page ${hit.pageIndex + 1}' : page.title}'),
                     subtitle: Text(hit.snippet, maxLines: 2, overflow: TextOverflow.ellipsis),
                     onTap: () => _open(hit),
                   );

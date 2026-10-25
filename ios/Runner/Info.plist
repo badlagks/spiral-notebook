@@ -4,6 +4,8 @@
 <dict>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Put photos and videos on your notebook pages.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Open your locked sections with Face ID.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Take a photo or video for your notebook.</string>
 	<key>NSMicrophoneUsageDescription</key>

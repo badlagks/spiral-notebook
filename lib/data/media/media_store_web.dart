@@ -58,15 +58,15 @@ class _IndexedDbMediaStore extends MediaStore {
   Future<web.IDBDatabase>? _db;
 
   Future<web.IDBDatabase> _open() => _db ??= () {
-        final done = Completer<web.IDBDatabase>();
-        final req = web.window.indexedDB.open('spiral_notebook_media', 1);
-        req.onupgradeneeded = ((web.Event _) {
-          (req.result as web.IDBDatabase).createObjectStore(_table);
-        }).toJS;
-        req.onsuccess = ((web.Event _) => done.complete(req.result as web.IDBDatabase)).toJS;
-        req.onerror = ((web.Event _) => done.completeError('Could not open media storage')).toJS;
-        return done.future;
-      }();
+    final done = Completer<web.IDBDatabase>();
+    final req = web.window.indexedDB.open('spiral_notebook_media', 1);
+    req.onupgradeneeded = ((web.Event _) {
+      (req.result as web.IDBDatabase).createObjectStore(_table);
+    }).toJS;
+    req.onsuccess = ((web.Event _) => done.complete(req.result as web.IDBDatabase)).toJS;
+    req.onerror = ((web.Event _) => done.completeError('Could not open media storage')).toJS;
+    return done.future;
+  }();
 
   Future<web.IDBObjectStore> _store(String mode) async =>
       (await _open()).transaction(_table.toJS, mode).objectStore(_table);

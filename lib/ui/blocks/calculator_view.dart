@@ -31,15 +31,23 @@ class _CalculatorViewState extends State<CalculatorView> {
   ];
 
   static _KeyKind _kindOf(String key) => switch (key) {
-        'MC' || 'MR' || 'M+' || 'M−' => _KeyKind.memory,
-        'C' || '√' || '%' || '±' => _KeyKind.function,
-        '÷' || '×' || '−' || '+' => _KeyKind.operator,
-        '=' => _KeyKind.equals,
-        _ => _KeyKind.digit,
-      };
+    'MC' || 'MR' || 'M+' || 'M−' => _KeyKind.memory,
+    'C' || '√' || '%' || '±' => _KeyKind.function,
+    '÷' || '×' || '−' || '+' => _KeyKind.operator,
+    '=' => _KeyKind.equals,
+    _ => _KeyKind.digit,
+  };
 
   static const _keyboard = <String, String>{
-    '+': '+', '-': '−', '*': '×', 'x': '×', '/': '÷', '=': '=', '%': '%', '.': '.', ',': '.',
+    '+': '+',
+    '-': '−',
+    '*': '×',
+    'x': '×',
+    '/': '÷',
+    '=': '=',
+    '%': '%',
+    '.': '.',
+    ',': '.',
   };
 
   void _press(String key) {
@@ -56,7 +64,8 @@ class _CalculatorViewState extends State<CalculatorView> {
     final ch = event.character;
     if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter) {
       _press('=');
-    } else if (key == LogicalKeyboardKey.escape || key == LogicalKeyboardKey.delete ||
+    } else if (key == LogicalKeyboardKey.escape ||
+        key == LogicalKeyboardKey.delete ||
         key == LogicalKeyboardKey.backspace) {
       _press('C');
     } else if (ch != null && RegExp(r'^[0-9]$').hasMatch(ch)) {
@@ -94,9 +103,7 @@ class _CalculatorViewState extends State<CalculatorView> {
                 colors: [Color(0xFFF1E9D8), Color(0xFFD9CDB4)],
               ),
               border: Border.all(color: const Color(0xFFB8AA8C)),
-              boxShadow: const [
-                BoxShadow(color: Color(0x55000000), blurRadius: 12, offset: Offset(3, 6)),
-              ],
+              boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 12, offset: Offset(3, 6))],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -122,53 +129,56 @@ class _CalculatorViewState extends State<CalculatorView> {
   }
 
   Widget _solarStrip() => Container(
-        width: 70,
-        height: 14,
-        decoration: BoxDecoration(
-          color: const Color(0xFF4A3B30),
-          borderRadius: BorderRadius.circular(2),
-          gradient: const LinearGradient(colors: [Color(0xFF5B4636), Color(0xFF3A2C22)]),
-        ),
-      );
+    width: 70,
+    height: 14,
+    decoration: BoxDecoration(
+      color: const Color(0xFF4A3B30),
+      borderRadius: BorderRadius.circular(2),
+      gradient: const LinearGradient(colors: [Color(0xFF5B4636), Color(0xFF3A2C22)]),
+    ),
+  );
 
   Widget _screen() => Container(
-        width: double.infinity,
-        height: 46,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        alignment: Alignment.centerRight,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(5),
-          gradient: const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFB7C2A4), Color(0xFFCAD4B6)],
+    width: double.infinity,
+    height: 46,
+    padding: const EdgeInsets.symmetric(horizontal: 10),
+    alignment: Alignment.centerRight,
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(5),
+      gradient: const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0xFFB7C2A4), Color(0xFFCAD4B6)],
+      ),
+      border: Border.all(color: const Color(0xFF6E7560), width: 2),
+    ),
+    child: Row(
+      children: [
+        if (_engine.memory != 0)
+          const Text(
+            'M',
+            style: TextStyle(fontFamily: 'Roboto', fontSize: 11, color: Color(0xFF2A3024)),
           ),
-          border: Border.all(color: const Color(0xFF6E7560), width: 2),
-        ),
-        child: Row(
-          children: [
-            if (_engine.memory != 0)
-              const Text('M', style: TextStyle(fontFamily: 'Roboto', fontSize: 11, color: Color(0xFF2A3024))),
-            const Spacer(),
-            Flexible(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  _engine.display,
-                  style: const TextStyle(
-                    fontFamily: 'Roboto',
-                    fontSize: 28,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 1.5,
-                    color: Color(0xFF20261A),
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
-                ),
+        const Spacer(),
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              _engine.display,
+              style: const TextStyle(
+                fontFamily: 'Roboto',
+                fontSize: 28,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 1.5,
+                color: Color(0xFF20261A),
+                fontFeatures: [FontFeature.tabularFigures()],
               ),
             ),
-          ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 
   Widget _key(String label) {
     final kind = _kindOf(label);

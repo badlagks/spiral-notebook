@@ -7,10 +7,12 @@ environment:
   sdk: ^3.13.7
 
 dependencies:
+  crypto: ^3.0.7
   file_picker: ^13.2.0
   flutter:
     sdk: flutter
   image_picker: ^1.2.4
+  local_auth: ^3.0.2
   path_provider: ^2.1.6
   pdf: ^3.13.1
   printing: ^5.15.1
