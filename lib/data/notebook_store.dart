@@ -36,10 +36,13 @@ class NotebookStore extends ChangeNotifier {
       if (raw != null) {
         nb = Notebook.fromJson(jsonDecode(raw) as Map<String, dynamic>);
       }
+      nb?.sections.expand((s) => s.pages).forEach((p) => p.placeUnplaced());
     } catch (e) {
       debugPrint('Could not load notebook, starting fresh: $e');
     }
-    return NotebookStore._(nb ?? sampleNotebook(), prefs);
+    final store = NotebookStore._(nb ?? sampleNotebook(), prefs);
+    store.purgeArchive(DateTime.now());
+    return store;
   }
 
   /// An in-memory store for tests and previews.
@@ -99,22 +102,89 @@ class NotebookStore extends ChangeNotifier {
     changed();
   }
 
-  void deleteSection(Section s) {
+  /// Removes a section. Its pages go to the archive, so they can be restored.
+  void deleteSection(Section s, {DateTime? now}) {
     if (sections.length <= 1) return;
+    final when = now ?? DateTime.now();
+    for (final p in s.pages.where((p) => p.blocks.isNotEmpty || p.title.isNotEmpty)) {
+      _archive(s, p, when);
+    }
     sections.remove(s);
     _sectionIndex = _sectionIndex.clamp(0, sections.length - 1);
     _pageIndex = 0;
     changed();
   }
 
-  void deletePage(Section s, NotePage p) {
-    if (s.pages.length <= 1) {
-      p.blocks.clear();
-      p.title = '';
-    } else {
-      s.pages.remove(p);
-    }
+  /// Tears a page out into the archive. A section always keeps one page.
+  ArchivedPage tearOut(Section s, NotePage p, {DateTime? now}) {
+    final archived = _archive(s, p, now ?? DateTime.now());
+    final at = s.pages.indexOf(p);
+    s.pages.remove(p);
+    if (s.pages.isEmpty) s.pages.add(NotePage(paper: p.paper));
+    if (s == section && at < _pageIndex) _pageIndex--;
     _pageIndex = _pageIndex.clamp(0, section.pages.length - 1);
+    changed();
+    return archived;
+  }
+
+  ArchivedPage _archive(Section s, NotePage p, DateTime when) {
+    final a = ArchivedPage(
+      page: p,
+      sectionId: s.id,
+      sectionName: s.name,
+      sectionColor: s.color,
+      tornAt: when,
+    );
+    notebook.archive.insert(0, a);
+    return a;
+  }
+
+  List<ArchivedPage> get archive => notebook.archive;
+
+  /// Puts a torn-out page back at the end of its section (recreating the
+  /// section if it was deleted) and opens it.
+  void restore(ArchivedPage a) {
+    notebook.archive.remove(a);
+    var target = sections.where((s) => s.id == a.sectionId).firstOrNull;
+    if (target == null) {
+      target = Section(id: a.sectionId, name: a.sectionName, color: a.sectionColor, pages: []);
+      sections.add(target);
+    }
+    // A blank placeholder page is replaced rather than kept in front.
+    if (target.pages.length == 1 && target.pages.first.blocks.isEmpty && target.pages.first.title.isEmpty) {
+      target.pages.clear();
+    }
+    target.pages.add(a.page);
+    _sectionIndex = sections.indexOf(target);
+    _pageIndex = target.pages.length - 1;
+    changed();
+  }
+
+  void deleteForever(ArchivedPage a) {
+    notebook.archive.remove(a);
+    changed();
+  }
+
+  /// Deletes torn-out pages older than 30 days.
+  void purgeArchive(DateTime now) {
+    final before = notebook.archive.length;
+    notebook.archive.removeWhere((a) => !now.isBefore(a.deleteAt));
+    if (notebook.archive.length != before) _scheduleSave();
+  }
+
+  /// Puts a new block on [page] in a free spot and saves.
+  void addBlock(NotePage page, Block block) {
+    if (!block.isPlaced) page.placeNew(block);
+    page.blocks.add(block);
+    changed();
+  }
+
+  /// Moves a block above the others on its page.
+  void bringToFront(NotePage page, Block block) {
+    if (page.blocks.last == block) return;
+    page.blocks
+      ..remove(block)
+      ..add(block);
     changed();
   }
 

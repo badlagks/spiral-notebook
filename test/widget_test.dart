@@ -4,8 +4,8 @@ import 'package:spiral_notebook/data/notebook_store.dart';
 import 'package:spiral_notebook/data/sample_notebook.dart';
 import 'package:spiral_notebook/main.dart';
 import 'package:spiral_notebook/models/notebook.dart';
+import 'package:spiral_notebook/ui/page_flip.dart';
 import 'package:spiral_notebook/ui/blocks/calculator_view.dart';
-import 'package:spiral_notebook/ui/paper_page.dart';
 
 Future<NotebookStore> pumpApp(WidgetTester tester, Size size) async {
   tester.view.physicalSize = size;
@@ -33,7 +33,7 @@ void main() {
     final store = await pumpApp(tester, const Size(390, 844));
     expect(find.text('Draft Outline'), findsOneWidget);
     expect(find.text('Project Budget'), findsNothing);
-    await tester.tap(find.byTooltip('Next page'));
+    await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
     expect(store.pageIndex, 1);
     expect(find.text('Project Budget'), findsOneWidget);
@@ -65,11 +65,6 @@ void main() {
 
   testWidgets('the calculator adds up', (tester) async {
     await pumpApp(tester, const Size(1400, 1100));
-    await tester.scrollUntilVisible(
-      find.text('='),
-      200,
-      scrollable: find.descendant(of: find.byType(PaperPage).at(1), matching: find.byType(Scrollable)).first,
-    );
     for (final k in ['C', '1', '2', '+', '3', '0', '=']) {
       await tester.tap(find.descendant(of: find.byType(CalculatorView), matching: find.text(k)));
       await tester.pump();
@@ -80,10 +75,13 @@ void main() {
   testWidgets('adding a checklist from the Add menu', (tester) async {
     final store = await pumpApp(tester, const Size(390, 844));
     final before = store.page.blocks.length;
-    await tester.scrollUntilVisible(find.text('Add'), 200, scrollable: find.byType(Scrollable).first);
     await tester.tap(find.text('Add'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Checklist'));
+    await tester.pumpAndSettle();
+    // The preview shows a sample checklist before anything is added.
+    expect(find.text('Send invoice'), findsOneWidget);
+    await tester.tap(find.text('Add to page'));
     await tester.pumpAndSettle();
     expect(store.page.blocks.length, before + 1);
     expect(store.page.blocks.last, isA<ChecklistBlock>());
@@ -98,5 +96,55 @@ void main() {
     await tester.tap(find.textContaining('Tasks ·'));
     await tester.pumpAndSettle();
     expect(store.section.name, 'Tasks');
+  });
+
+  testWidgets('a widget can be picked up and dragged to a new spot', (tester) async {
+    final store = await pumpApp(tester, const Size(1400, 900));
+    final sticky = store.sections.first.pages.first.blocks.whereType<StickyBlock>().first;
+    final before = Offset(sticky.x!, sticky.y!);
+    await tester.tap(find.text('Call Sam about the sketches'));
+    await tester.pumpAndSettle();
+    final handle = find.descendant(
+      of: find.byWidgetPredicate((w) => w is AnimatedOpacity && w.opacity == 1),
+      matching: find.text('Move'),
+    );
+    await tester.drag(handle, const Offset(-120, 200));
+    await tester.pumpAndSettle();
+    expect(sticky.x, lessThan(before.dx - 50));
+    expect(sticky.y, greaterThan(before.dy + 100));
+  });
+
+  testWidgets('dragging the page edge flips to the next spread', (tester) async {
+    final store = await pumpApp(tester, const Size(1400, 900));
+    final edge = tester.getRect(find.byType(FlippingBook)).centerRight - const Offset(12, 0);
+    await tester.dragFrom(edge, const Offset(-700, 0));
+    await tester.pumpAndSettle();
+    expect(store.pageIndex, 2);
+    expect(find.text('Pages 3–4'), findsOneWidget);
+  });
+
+  testWidgets('a phone held sideways shows two pages', (tester) async {
+    await pumpApp(tester, const Size(844, 390));
+    expect(find.text('Draft Outline'), findsOneWidget);
+    expect(find.text('Project Budget'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a torn-out page goes to the archive and can be restored', (tester) async {
+    final store = await pumpApp(tester, const Size(390, 844));
+    await tester.tap(find.byTooltip('Page options'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tear out this page'));
+    await tester.pumpAndSettle();
+    expect(store.archive.single.page.title, 'Draft Outline');
+    expect(store.section.pages.first.title, 'Project Budget');
+
+    await tester.tap(find.byTooltip('Torn-out pages'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('deleted in 30 days'), findsOneWidget);
+    await tester.tap(find.text('Restore'));
+    await tester.pumpAndSettle();
+    expect(store.archive, isEmpty);
+    expect(store.page.title, 'Draft Outline');
   });
 }

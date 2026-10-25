@@ -178,7 +178,7 @@ Future<void> showSectionEditor(BuildContext context, Section? section) async {
       context: context,
       builder: (c) => AlertDialog(
         title: Text('Delete "${section.name}"?'),
-        content: Text('All ${section.pages.length} page(s) in this section will be deleted.'),
+        content: const Text('Its pages go to Torn-out pages, where you can restore them for 30 days.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Keep')),
           FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Delete')),

@@ -6,6 +6,11 @@ final _rand = Random();
 String newId() =>
     '${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}${_rand.nextInt(1 << 20).toRadixString(36)}';
 
+/// Every page is laid out on the same sheet size, in paper units, and scaled
+/// to fit the screen. Widgets keep their place on any device. (A5 proportions.)
+const pageWidth = 480.0;
+const pageHeight = 680.0;
+
 /// Paper styles a page can be printed on.
 enum PaperStyle { ruled, grid, blank }
 
@@ -71,26 +76,112 @@ class NotePage {
             .toList(),
       );
 
+  /// Gives blocks with no position (from older notebooks) a spot,
+  /// stacked down the page below anything already placed.
+  void placeUnplaced() {
+    var cursor = 96.0;
+    for (final b in blocks.where((b) => b.isPlaced)) {
+      cursor = max(cursor, b.y! + b.estimatedHeight + 16);
+    }
+    for (final b in blocks.where((b) => !b.isPlaced)) {
+      b
+        ..x = 48
+        ..y = cursor;
+      cursor += b.estimatedHeight + 16;
+    }
+  }
+
+  /// A free spot for a new block: the first gap down the page that fits,
+  /// or a little cascade from the top if the page is full.
+  void placeNew(Block block) {
+    const left = 48.0;
+    var y = 96.0;
+    final sorted = blocks.where((b) => b.isPlaced).toList()..sort((a, b) => a.y!.compareTo(b.y!));
+    for (final b in sorted) {
+      final overlapsX = b.x! < left + block.width && b.x! + b.width > left;
+      if (overlapsX && b.y! < y + block.estimatedHeight && b.y! + b.estimatedHeight > y) {
+        y = b.y! + b.estimatedHeight + 16;
+      }
+    }
+    if (y + 40 > pageHeight) {
+      final n = blocks.length % 6;
+      block
+        ..x = 60.0 + n * 18
+        ..y = 110.0 + n * 18;
+    } else {
+      block
+        ..x = left
+        ..y = y;
+    }
+  }
+
   /// All the words on the page, for search.
   String get searchableText =>
       [title, ...blocks.map((b) => b.searchableText)].join('\n');
 }
 
-/// Something placed on a page: handwriting, a checklist, a spreadsheet or a calculator.
+/// Something placed on a page: handwriting, a sticky note, a checklist,
+/// a spreadsheet or a calculator. It sits wherever it was dragged to.
 sealed class Block {
-  Block({String? id}) : id = id ?? newId();
+  Block({String? id, this.x, this.y, double? width, this.angle = 0})
+      : id = id ?? newId(),
+        // ignore: prefer_initializing_formals
+        _width = width;
+
   final String id;
+
+  /// Top-left corner in paper units. Null until the block is first placed.
+  double? x;
+  double? y;
+  double? _width;
+
+  /// A slight tilt in degrees, so things look placed by hand.
+  double angle;
+
+  double get defaultWidth;
+  double get minWidth => 120;
+  double get width => _width ?? defaultWidth;
+
+  /// Roughly how tall the block draws, for finding free space.
+  double get estimatedHeight => switch (this) {
+        TextBlock(:final text, :final kind) =>
+          kind == TextKind.heading ? 44 : 28.0 * '\n'.allMatches(text).length + 32,
+        StickyBlock() => width,
+        ChecklistBlock(:final items) => 30.0 * items.length,
+        SheetBlock(:final rows, :final naturalWidth) => (rows + 2) * 24 * width / naturalWidth,
+        CalculatorBlock() => 330 * width / CalculatorBlock.naturalWidth,
+      };
+  set width(double w) => _width = w;
+  bool get isPlaced => x != null && y != null;
 
   Map<String, dynamic> toJson();
   String get searchableText;
 
-  static Block fromJson(Map<String, dynamic> j) => switch (j['type']) {
-        'text' => TextBlock.fromJson(j),
-        'checklist' => ChecklistBlock.fromJson(j),
-        'sheet' => SheetBlock.fromJson(j),
-        'calculator' => CalculatorBlock.fromJson(j),
-        _ => TextBlock(text: ''),
+  Map<String, dynamic> layoutJson() => {
+        if (x != null) 'x': x,
+        if (y != null) 'y': y,
+        if (_width != null) 'w': _width,
+        if (angle != 0) 'angle': angle,
       };
+
+  void readLayout(Map<String, dynamic> j) {
+    x = (j['x'] as num?)?.toDouble();
+    y = (j['y'] as num?)?.toDouble();
+    _width = (j['w'] as num?)?.toDouble();
+    angle = (j['angle'] as num?)?.toDouble() ?? 0;
+  }
+
+  static Block fromJson(Map<String, dynamic> j) {
+    final Block b = switch (j['type']) {
+      'text' => TextBlock.fromJson(j),
+      'sticky' => StickyBlock.fromJson(j),
+      'checklist' => ChecklistBlock.fromJson(j),
+      'sheet' => SheetBlock.fromJson(j),
+      'calculator' => CalculatorBlock.fromJson(j),
+      _ => TextBlock(text: ''),
+    };
+    return b..readLayout(j);
+  }
 }
 
 enum TextKind { heading, body }
@@ -98,14 +189,26 @@ enum TextKind { heading, body }
 /// Free handwriting. Lines starting with "- " render as an outline,
 /// and extra leading spaces indent them further.
 class TextBlock extends Block {
-  TextBlock({super.id, this.text = '', this.kind = TextKind.body, this.highlight = false});
+  TextBlock({
+    super.id,
+    super.x,
+    super.y,
+    super.width,
+    this.text = '',
+    this.kind = TextKind.body,
+    this.highlight = false,
+  });
 
   String text;
   TextKind kind;
   bool highlight;
 
   @override
+  double get defaultWidth => highlight ? 200 : 300;
+
+  @override
   Map<String, dynamic> toJson() => {
+        ...layoutJson(),
         'type': 'text',
         'id': id,
         'text': text,
@@ -118,6 +221,35 @@ class TextBlock extends Block {
         text: j['text'] as String? ?? '',
         kind: TextKind.values.asNameMap()[j['kind']] ?? TextKind.body,
         highlight: j['highlight'] as bool? ?? false,
+      );
+
+  @override
+  String get searchableText => text;
+}
+
+/// A square paper note that sticks anywhere, slightly crooked.
+class StickyBlock extends Block {
+  StickyBlock({super.id, super.x, super.y, super.width, super.angle = -2, this.text = '', this.color = 0xFFFFF59D});
+
+  String text;
+  int color;
+
+  @override
+  double get defaultWidth => 170;
+
+  @override
+  Map<String, dynamic> toJson() => {
+        ...layoutJson(),
+        'type': 'sticky',
+        'id': id,
+        'text': text,
+        'color': color,
+      };
+
+  factory StickyBlock.fromJson(Map<String, dynamic> j) => StickyBlock(
+        id: j['id'] as String,
+        text: j['text'] as String? ?? '',
+        color: j['color'] as int? ?? 0xFFFFF59D,
       );
 
   @override
@@ -139,13 +271,17 @@ class ChecklistItem {
 }
 
 class ChecklistBlock extends Block {
-  ChecklistBlock({super.id, List<ChecklistItem>? items})
+  ChecklistBlock({super.id, super.x, super.y, super.width, List<ChecklistItem>? items})
       : items = items ?? [ChecklistItem()];
 
   final List<ChecklistItem> items;
 
   @override
+  double get defaultWidth => 260;
+
+  @override
   Map<String, dynamic> toJson() => {
+        ...layoutJson(),
         'type': 'checklist',
         'id': id,
         'items': items.map((i) => i.toJson()).toList(),
@@ -164,11 +300,20 @@ class ChecklistBlock extends Block {
 
 /// A small spreadsheet. Cells hold raw input; formulas start with "=".
 class SheetBlock extends Block {
-  SheetBlock({super.id, int rows = 6, int cols = 4, List<List<String>>? cells})
+  SheetBlock({super.id, super.x, super.y, super.width, int rows = 6, int cols = 4, List<List<String>>? cells})
       : cells = cells ??
             List.generate(rows, (_) => List.filled(cols, '', growable: true));
 
   final List<List<String>> cells;
+
+  /// The spreadsheet's drawn size before it is scaled to [width].
+  double get naturalWidth => 30 + 112 + (cols - 1) * 78;
+
+  @override
+  double get defaultWidth => naturalWidth;
+
+  @override
+  double get minWidth => 160;
 
   int get rows => cells.length;
   int get cols => cells.isEmpty ? 0 : cells.first.length;
@@ -193,7 +338,7 @@ class SheetBlock extends Block {
   }
 
   @override
-  Map<String, dynamic> toJson() => {'type': 'sheet', 'id': id, 'cells': cells};
+  Map<String, dynamic> toJson() => {...layoutJson(), 'type': 'sheet', 'id': id, 'cells': cells};
 
   factory SheetBlock.fromJson(Map<String, dynamic> j) => SheetBlock(
         id: j['id'] as String,
@@ -207,14 +352,23 @@ class SheetBlock extends Block {
 }
 
 class CalculatorBlock extends Block {
-  CalculatorBlock({super.id, this.display = '0', this.memory = 0});
+  CalculatorBlock({super.id, super.x, super.y, super.width, this.display = '0', this.memory = 0});
 
   String display;
   double memory;
 
+  /// The calculator's drawn width before it is scaled to [width].
+  static const naturalWidth = 216.0;
+
+  @override
+  double get defaultWidth => 190;
+
+  @override
+  double get minWidth => 130;
+
   @override
   Map<String, dynamic> toJson() =>
-      {'type': 'calculator', 'id': id, 'display': display, 'memory': memory};
+      {...layoutJson(), 'type': 'calculator', 'id': id, 'display': display, 'memory': memory};
 
   factory CalculatorBlock.fromJson(Map<String, dynamic> j) => CalculatorBlock(
         id: j['id'] as String,
@@ -226,22 +380,73 @@ class CalculatorBlock extends Block {
   String get searchableText => display;
 }
 
+/// A page that was torn out. It can be put back for [ArchivedPage.keepFor].
+class ArchivedPage {
+  ArchivedPage({
+    required this.page,
+    required this.sectionId,
+    required this.sectionName,
+    required this.sectionColor,
+    required this.tornAt,
+  });
+
+  static const keepFor = Duration(days: 30);
+
+  final NotePage page;
+  final String sectionId;
+  final String sectionName;
+  final int sectionColor;
+  final DateTime tornAt;
+
+  DateTime get deleteAt => tornAt.add(keepFor);
+
+  /// Whole days left before it is deleted for good, never below 0.
+  int daysLeft(DateTime now) {
+    final left = deleteAt.difference(now);
+    return left.isNegative ? 0 : (left.inHours / 24).ceil();
+  }
+
+  Map<String, dynamic> toJson() => {
+        'page': page.toJson(),
+        'sectionId': sectionId,
+        'sectionName': sectionName,
+        'sectionColor': sectionColor,
+        'tornAt': tornAt.toUtc().toIso8601String(),
+      };
+
+  factory ArchivedPage.fromJson(Map<String, dynamic> j) => ArchivedPage(
+        page: NotePage.fromJson(j['page'] as Map<String, dynamic>),
+        sectionId: j['sectionId'] as String,
+        sectionName: j['sectionName'] as String,
+        sectionColor: j['sectionColor'] as int,
+        tornAt: DateTime.parse(j['tornAt'] as String),
+      );
+}
+
 class Notebook {
-  Notebook({required this.title, required this.sections});
+  Notebook({required this.title, required this.sections, List<ArchivedPage>? archive})
+      : archive = archive ?? [];
 
   String title;
   final List<Section> sections;
 
+  /// Torn-out pages, newest first.
+  final List<ArchivedPage> archive;
+
   Map<String, dynamic> toJson() => {
-        'version': 1,
+        'version': 2,
         'title': title,
         'sections': sections.map((s) => s.toJson()).toList(),
+        'archive': archive.map((a) => a.toJson()).toList(),
       };
 
   factory Notebook.fromJson(Map<String, dynamic> j) => Notebook(
         title: j['title'] as String? ?? 'My Notebook',
         sections: (j['sections'] as List)
             .map((s) => Section.fromJson(s as Map<String, dynamic>))
+            .toList(),
+        archive: ((j['archive'] as List?) ?? [])
+            .map((a) => ArchivedPage.fromJson(a as Map<String, dynamic>))
             .toList(),
       );
 }

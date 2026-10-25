@@ -74,11 +74,8 @@ class _SheetViewState extends State<SheetView> {
     final eval = SheetEvaluator(_sheet.cells);
     final width = _rowHeaderWidth + List.generate(_sheet.cols, _widthOf).fold(0.0, (a, b) => a + b);
 
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Container(
+    // Drawn at its natural size; the page scales it to the width it was given.
+    return Container(
           width: width + 2,
           decoration: BoxDecoration(
             color: Colors.white,
@@ -95,9 +92,7 @@ class _SheetViewState extends State<SheetView> {
               for (var r = 0; r < _sheet.rows; r++) _dataRow(r, eval),
             ],
           ),
-        ),
-      ),
-    );
+        );
   }
 
   Widget _formulaBar(double width) {

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:spiral_notebook/data/notebook_store.dart';
 import 'package:spiral_notebook/data/sample_notebook.dart';
 import 'package:spiral_notebook/logic/calculator.dart';
 import 'package:spiral_notebook/logic/formula.dart';
@@ -128,5 +129,53 @@ void main() {
     final blocks = copy.sections.first.pages[1].blocks;
     expect(blocks.whereType<ChecklistBlock>().first.items.where((i) => i.done).length, 4);
     expect(blocks.whereType<CalculatorBlock>().first.display, '1,450.00');
+  });
+
+  group('pages and archive', () {
+    test('old notebooks without positions get stacked down the page', () {
+      final page = NotePage(blocks: [TextBlock(text: 'a'), ChecklistBlock(), CalculatorBlock()]);
+      page.placeUnplaced();
+      final ys = page.blocks.map((b) => b.y!).toList();
+      expect(page.blocks.every((b) => b.isPlaced), isTrue);
+      expect(ys, orderedEquals([...ys]..sort()));
+      expect(ys.first, 96);
+    });
+
+    test('a new widget lands below what is already there', () {
+      final page = NotePage(blocks: [TextBlock(x: 48, y: 96, text: 'one')]);
+      final next = ChecklistBlock();
+      page.placeNew(next);
+      expect(next.y, greaterThan(96 + 30));
+    });
+
+    test('layout survives a save and load', () {
+      final b = StickyBlock(x: 12, y: 34, width: 150, text: 'hi')..angle = 3;
+      final copy = Block.fromJson(jsonDecode(jsonEncode(b.toJson())) as Map<String, dynamic>) as StickyBlock;
+      expect([copy.x, copy.y, copy.width, copy.angle, copy.text], [12, 34, 150, 3, 'hi']);
+    });
+
+    test('torn pages are restorable for 30 days, then purged', () {
+      final store = NotebookStore.memory(sampleNotebook());
+      final ideas = store.sections.first;
+      final page = ideas.pages.first;
+      final torn = DateTime(2026, 10, 1);
+      final a = store.tearOut(ideas, page, now: torn);
+      expect(ideas.pages, isNot(contains(page)));
+      expect(a.daysLeft(DateTime(2026, 10, 2)), 29);
+      store.purgeArchive(DateTime(2026, 10, 30));
+      expect(store.archive, hasLength(1));
+      store.purgeArchive(DateTime(2026, 10, 31));
+      expect(store.archive, isEmpty);
+    });
+
+    test('deleting a section archives its pages and restore brings the section back', () {
+      final store = NotebookStore.memory(sampleNotebook());
+      final tasks = store.sections.last;
+      store.deleteSection(tasks);
+      expect(store.sections.map((s) => s.name), isNot(contains('Tasks')));
+      store.restore(store.archive.single);
+      expect(store.section.name, 'Tasks');
+      expect(store.page.title, 'This week');
+    });
   });
 }

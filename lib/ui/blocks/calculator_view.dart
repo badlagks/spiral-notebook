@@ -77,15 +77,14 @@ class _CalculatorViewState extends State<CalculatorView> {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
+    return SizedBox(
+      width: CalculatorBlock.naturalWidth,
       child: Focus(
         focusNode: _focus,
         onKeyEvent: _onKey,
         child: GestureDetector(
           onTapDown: (_) => _focus.requestFocus(),
           child: Container(
-            width: 216,
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),

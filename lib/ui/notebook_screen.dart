@@ -2,32 +2,48 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/notebook_store.dart';
-import '../models/notebook.dart';
+import 'archive_dialog.dart';
+import 'page_flip.dart';
 import 'paper_page.dart';
-import 'paper_painters.dart';
 import 'search_dialog.dart';
 import 'section_tabs.dart';
 import 'store_scope.dart';
 import 'theme.dart';
 
-/// Widths at or above this show an open two-page spread (Mac, Chromebook,
-/// tablets); narrower screens show one page at a time (phones).
-const spreadBreakpoint = 860.0;
+/// Whether the screen shows two pages with the coil in the middle: laptops,
+/// tablets in landscape and phones held sideways. Upright phones and
+/// tablets show one page with the coil down its left edge.
+bool showsSpread(Size size) => (size.width > size.height && size.width >= 560) || size.width >= 1100;
 
-class NotebookScreen extends StatelessWidget {
+/// The leather cover's margin around the pages, in paper units.
+const _coverMargin = 8.0;
+
+class NotebookScreen extends StatefulWidget {
   const NotebookScreen({super.key});
 
   @override
+  State<NotebookScreen> createState() => _NotebookScreenState();
+}
+
+class _NotebookScreenState extends State<NotebookScreen> {
+  final _flip = FlipController();
+
+  @override
+  void dispose() {
+    _flip.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final store = StoreScope.of(context);
     return LayoutBuilder(builder: (context, constraints) {
-      final spread = constraints.maxWidth >= spreadBreakpoint;
+      final spread = showsSpread(constraints.biggest);
       return CallbackShortcuts(
         bindings: {
           const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () => showNotebookSearch(context),
           const SingleActivator(LogicalKeyboardKey.keyF, control: true): () => showNotebookSearch(context),
-          const SingleActivator(LogicalKeyboardKey.pageDown): () => store.turnPage(spread ? 2 : 1),
-          const SingleActivator(LogicalKeyboardKey.pageUp): () => store.turnPage(spread ? -2 : -1),
+          const SingleActivator(LogicalKeyboardKey.pageDown): () => _flip.flip(1),
+          const SingleActivator(LogicalKeyboardKey.pageUp): () => _flip.flip(-1),
         },
         child: Focus(
           autofocus: true,
@@ -43,9 +59,9 @@ class NotebookScreen extends StatelessWidget {
               child: SafeArea(
                 child: Column(
                   children: [
-                    _TopBar(spread: spread),
-                    Expanded(child: spread ? const _Spread() : const _SinglePage()),
-                    if (!spread) const _PageBar(),
+                    _TopBar(spread: spread, flip: _flip),
+                    Expanded(child: _Book(spread: spread, flip: _flip)),
+                    if (!spread) _PageBar(flip: _flip),
                   ],
                 ),
               ),
@@ -58,16 +74,18 @@ class NotebookScreen extends StatelessWidget {
 }
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.spread});
+  const _TopBar({required this.spread, required this.flip});
   final bool spread;
+  final FlipController flip;
 
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
     final section = store.section;
-    final left = spread ? store.pageIndex - store.pageIndex % 2 : store.pageIndex;
+    final narrow = MediaQuery.sizeOf(context).width < 520;
+    final left = store.pageIndex - store.pageIndex % 2;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 12, 4),
+      padding: const EdgeInsets.fromLTRB(16, 4, 8, 0),
       child: Row(
         children: [
           Container(
@@ -84,54 +102,71 @@ class _TopBar extends StatelessWidget {
             ),
           ),
           if (spread) ...[
-            const SizedBox(width: 12),
-            _turnButton(context, Icons.chevron_left, 'Previous pages', left > 0 ? () => store.turnPage(-2) : null),
-            Text(
-              'Pages ${left + 1}–${left + 2}',
-              style: const TextStyle(color: Colors.white70, fontSize: 13),
-            ),
-            _turnButton(context, Icons.chevron_right, 'Next pages', () => store.turnPage(2)),
+            const SizedBox(width: 8),
+            _iconButton(Icons.chevron_left, 'Previous pages', left > 0 ? () => flip.flip(-1) : null),
+            Text('Pages ${left + 1}–${left + 2}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+            _iconButton(Icons.chevron_right, 'Next pages', () => flip.flip(1)),
           ],
           const Spacer(),
           const _SaveBadge(),
-          const SizedBox(width: 8),
-          spread
-              ? SizedBox(
-                  width: 220,
-                  height: 32,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white60,
-                      side: const BorderSide(color: Colors.white24),
-                      alignment: Alignment.centerLeft,
-                    ),
-                    onPressed: () => showNotebookSearch(context),
-                    icon: const Icon(Icons.search, size: 18),
-                    label: const Text('Search'),
+          const SizedBox(width: 4),
+          _ArchiveButton(count: store.archive.length),
+          if (spread && !narrow)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: SizedBox(
+                width: 200,
+                height: 32,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white60,
+                    side: const BorderSide(color: Colors.white24),
+                    alignment: Alignment.centerLeft,
                   ),
-                )
-              : IconButton(
-                  tooltip: 'Search',
-                  color: Colors.white70,
                   onPressed: () => showNotebookSearch(context),
-                  icon: const Icon(Icons.search),
+                  icon: const Icon(Icons.search, size: 18),
+                  label: const Text('Search'),
                 ),
+              ),
+            )
+          else
+            _iconButton(Icons.search, 'Search', () => showNotebookSearch(context)),
         ],
       ),
     );
   }
-
-  Widget _turnButton(BuildContext context, IconData icon, String tip, VoidCallback? onTap) => IconButton(
-        tooltip: tip,
-        visualDensity: VisualDensity.compact,
-        color: Colors.white70,
-        disabledColor: Colors.white24,
-        onPressed: onTap,
-        icon: Icon(icon),
-      );
 }
 
-/// Shows that notes are saved on this device (sync between devices comes later).
+Widget _iconButton(IconData icon, String tip, VoidCallback? onTap) => IconButton(
+      tooltip: tip,
+      visualDensity: VisualDensity.compact,
+      color: Colors.white70,
+      disabledColor: Colors.white24,
+      onPressed: onTap,
+      icon: Icon(icon),
+    );
+
+class _ArchiveButton extends StatelessWidget {
+  const _ArchiveButton({required this.count});
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Torn-out pages',
+      visualDensity: VisualDensity.compact,
+      color: Colors.white70,
+      onPressed: () => showArchive(context),
+      icon: Badge(
+        isLabelVisible: count > 0,
+        label: Text('$count'),
+        child: const Icon(Icons.inventory_2_outlined),
+      ),
+    );
+  }
+}
+
+/// Shows that notes are saved on this device. The app works fully offline.
 class _SaveBadge extends StatelessWidget {
   const _SaveBadge();
 
@@ -152,7 +187,7 @@ class _SaveBadge extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 16, color: state == SaveState.failed ? Colors.redAccent : Colors.white54),
-              if (MediaQuery.sizeOf(context).width > 520) ...[
+              if (MediaQuery.sizeOf(context).width > 700) ...[
                 const SizedBox(width: 6),
                 Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
               ],
@@ -164,206 +199,107 @@ class _SaveBadge extends StatelessWidget {
   }
 }
 
-/// A leather cover with pages laid on it.
-class _Cover extends StatelessWidget {
-  const _Cover({required this.child});
-  final Widget child;
+/// The notebook itself: the cover, the pages (scaled to fit) and the tabs.
+class _Book extends StatelessWidget {
+  const _Book({required this.spread, required this.flip});
+  final bool spread;
+  final FlipController flip;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 8, 4, 8),
+    final store = StoreScope.of(context);
+    final section = store.section;
+
+    Widget buildPage(int index, {required bool bindingOnLeft, required bool interactive}) {
+      if (index < 0) return const SizedBox.shrink();
+      if (index >= section.pages.length) {
+        return BlankSheet(
+          bindingOnLeft: bindingOnLeft,
+          onStart: interactive ? () => store.ensurePage(index) : null,
+        );
+      }
+      final page = section.pages[index];
+      return PaperPage(
+        key: ValueKey(page.id),
+        section: section,
+        page: page,
+        pageNumber: index + 1,
+        bindingOnLeft: bindingOnLeft,
+        interactive: interactive,
+      );
+    }
+
+    final book = Container(
+      padding: const EdgeInsets.all(_coverMargin),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [Paper.cover, Paper.coverDark],
         ),
-        boxShadow: const [
-          BoxShadow(color: Color(0x88000000), blurRadius: 24, offset: Offset(0, 12)),
-        ],
+        boxShadow: const [BoxShadow(color: Color(0x88000000), blurRadius: 24, offset: Offset(0, 12))],
       ),
       child: DecoratedBox(
-        // A few page edges peeking out under the top sheet.
         decoration: const BoxDecoration(
-          color: Paper.sheetEdge,
-          borderRadius: BorderRadius.all(Radius.circular(3)),
-          boxShadow: [BoxShadow(color: Color(0x44000000), blurRadius: 3, offset: Offset(1, 2))],
+          boxShadow: [BoxShadow(color: Color(0x55000000), blurRadius: 3, offset: Offset(1, 2))],
         ),
-        child: Padding(
-          padding: const EdgeInsets.only(right: 2, bottom: 2),
-          child: ClipRRect(borderRadius: BorderRadius.circular(3), child: child),
-        ),
+        child: FlippingBook(spread: spread, controller: flip, buildPage: buildPage),
       ),
     );
-  }
-}
-
-class _Spread extends StatelessWidget {
-  const _Spread();
-
-  @override
-  Widget build(BuildContext context) {
-    final store = StoreScope.of(context);
-    final section = store.section;
-    final left = store.pageIndex - store.pageIndex % 2;
-    final right = left + 1;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 8, 8, 24),
+      padding: EdgeInsets.fromLTRB(spread ? 20 : 8, 6, 0, spread ? 16 : 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: _Cover(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                child: Row(
-                  key: ValueKey('${section.id}-$left'),
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      child: PaperPage(
-                        key: ValueKey(section.pages[left].id),
-                        section: section,
-                        page: section.pages[left],
-                        pageNumber: left + 1,
-                        bindingOnLeft: false,
-                      ),
-                    ),
-                    const SizedBox(
-                      width: 34,
-                      child: ColoredBox(
-                        color: Color(0xFFE9DFC8),
-                        child: CustomPaint(painter: SpiralPainter()),
-                      ),
-                    ),
-                    Expanded(
-                      child: right < section.pages.length
-                          ? PaperPage(
-                              key: ValueKey(section.pages[right].id),
-                              section: section,
-                              page: section.pages[right],
-                              pageNumber: right + 1,
-                              bindingOnLeft: true,
-                            )
-                          : _BlankPage(onStart: () => store.ensurePage(right)),
-                    ),
-                  ],
-                ),
-              ),
+          Expanded(child: FittedBox(child: book)),
+          // Short screens (a phone held sideways) get shorter tabs so they all fit.
+          LayoutBuilder(
+            builder: (context, c) => SectionTabs(
+              tabWidth: spread ? 34 : 28,
+              tabHeight: ((c.maxHeight - 80) / (store.sections.length + 0.5)).clamp(48.0, spread ? 92.0 : 78.0),
             ),
           ),
-          const SectionTabs(),
         ],
       ),
     );
   }
 }
 
-class _SinglePage extends StatelessWidget {
-  const _SinglePage();
-
-  @override
-  Widget build(BuildContext context) {
-    final store = StoreScope.of(context);
-    final section = store.section;
-    final page = store.page;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 4, 0, 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: _Cover(
-              child: GestureDetector(
-                // Swipe sideways to turn the page.
-                onHorizontalDragEnd: (d) {
-                  final v = d.primaryVelocity ?? 0;
-                  if (v < -300) store.turnPage(1);
-                  if (v > 300) store.turnPage(-1);
-                },
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 200),
-                        child: PaperPage(
-                          key: ValueKey(page.id),
-                          section: section,
-                          page: page,
-                          pageNumber: store.pageIndex + 1,
-                          bindingOnLeft: true,
-                        ),
-                      ),
-                    ),
-                    const Positioned(
-                      left: -6,
-                      top: 0,
-                      bottom: 0,
-                      width: 30,
-                      child: IgnorePointer(child: CustomPaint(painter: SpiralPainter())),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SectionTabs(tabWidth: 28, tabHeight: 78),
-        ],
-      ),
-    );
-  }
-}
-
-class _BlankPage extends StatelessWidget {
-  const _BlankPage({required this.onStart});
-  final VoidCallback onStart;
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: PaperPainter(style: PaperStyle.ruled, bindingOnLeft: true),
-      child: Center(
-        child: TextButton.icon(
-          onPressed: onStart,
-          icon: const Icon(Icons.edit_outlined, color: Pen.pencil),
-          label: Text('Start a new page', style: handwriting.copyWith(color: Pen.pencil)),
-        ),
-      ),
-    );
-  }
-}
-
+/// Page controls under the single page on an upright phone.
 class _PageBar extends StatelessWidget {
-  const _PageBar();
+  const _PageBar({required this.flip});
+  final FlipController flip;
 
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
+    final first = store.pageIndex == 0;
     final last = store.pageIndex == store.section.pages.length - 1;
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          IconButton(
-            tooltip: 'Previous page',
-            color: Colors.white70,
-            disabledColor: Colors.white24,
-            onPressed: store.pageIndex > 0 ? () => store.turnPage(-1) : null,
+          TextButton.icon(
+            style: TextButton.styleFrom(foregroundColor: Colors.white70, disabledForegroundColor: Colors.white24),
+            onPressed: first ? null : () => flip.flip(-1),
             icon: const Icon(Icons.chevron_left),
+            label: const Text('Back'),
           ),
           Text(
-            'Page ${store.pageIndex + 1} of ${store.section.pages.length}',
+            '${store.pageIndex + 1} / ${store.section.pages.length}',
             style: const TextStyle(color: Colors.white70, fontSize: 13),
           ),
-          IconButton(
-            tooltip: last ? 'New page' : 'Next page',
-            color: Colors.white70,
-            onPressed: () => store.turnPage(1),
-            icon: Icon(last ? Icons.note_add_outlined : Icons.chevron_right),
+          Directionality(
+            textDirection: TextDirection.rtl,
+            child: TextButton.icon(
+              style: TextButton.styleFrom(foregroundColor: Colors.white70),
+              onPressed: () => flip.flip(1),
+              icon: Icon(last ? Icons.note_add_outlined : Icons.chevron_left),
+              label: Text(last ? 'New page' : 'Next'),
+            ),
           ),
         ],
       ),
