@@ -38,7 +38,7 @@ class _CalendarState extends State<_Calendar> {
   }
 
   /// The six weeks shown, starting on the Monday on or before the 1st.
-  DateTime get _gridStart => _month.subtract(Duration(days: _month.weekday - 1));
+  DateTime get _gridStart => DateTime(_month.year, _month.month, 2 - _month.weekday);
 
   Future<void> _loadPhone() async {
     final store = StoreScope.read(context);
@@ -47,7 +47,7 @@ class _CalendarState extends State<_Calendar> {
       return;
     }
     final from = _gridStart;
-    final events = await phoneCalendar.events(from, from.add(const Duration(days: 42)));
+    final events = await phoneCalendar.events(from, DateTime(from.year, from.month, from.day + 42));
     if (mounted) setState(() => _phone = events);
   }
 
@@ -74,7 +74,7 @@ class _CalendarState extends State<_Calendar> {
   }
 
   bool _onDay(DateTime start, DateTime end, DateTime day) {
-    final next = day.add(const Duration(days: 1));
+    final next = DateTime(day.year, day.month, day.day + 1);
     return start.isBefore(next) && (end.isAfter(day) || _day(start) == day);
   }
 

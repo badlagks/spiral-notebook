@@ -18,7 +18,12 @@ String friendlyTime(BuildContext context, DateTime at, {DateTime? now}) {
   final today = _day(now ?? DateTime.now());
   final time = MaterialLocalizations.of(context)
       .formatTimeOfDay(TimeOfDay.fromDateTime(at), alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context));
-  final days = _day(at).difference(today).inDays;
+  // Counted on calendar dates, so a clock change doesn't make tomorrow "Today".
+  final days = DateTime.utc(
+    at.year,
+    at.month,
+    at.day,
+  ).difference(DateTime.utc(today.year, today.month, today.day)).inDays;
   final day = switch (days) {
     0 => 'Today',
     1 => 'Tomorrow',
@@ -36,10 +41,12 @@ Future<void> showReminderEditor(BuildContext context, Block block) async {
   final today = _day(now);
   final quick = <String, DateTime>{
     'In 1 hour': now.add(const Duration(hours: 1)),
-    if (now.hour < 18) 'This evening': today.add(const Duration(hours: 19)),
-    'Tomorrow morning': today.add(const Duration(days: 1, hours: 9)),
+    // Built from the date, not by adding hours, so the night the clocks
+    // change still gives 9:00 and not 8:00.
+    if (now.hour < 18) 'This evening': DateTime(now.year, now.month, now.day, 19),
+    'Tomorrow morning': DateTime(now.year, now.month, now.day + 1, 9),
     // Monday morning, but never the same as "Tomorrow morning".
-    'Next week': today.add(Duration(days: now.weekday == DateTime.sunday ? 8 : 8 - now.weekday, hours: 9)),
+    'Next week': DateTime(now.year, now.month, now.day + (now.weekday == DateTime.sunday ? 8 : 8 - now.weekday), 9),
   };
   DateTime? at = block.reminder?.at;
   var toCalendar = block.reminder?.calendarEventId != null;
@@ -54,7 +61,7 @@ Future<void> showReminderEditor(BuildContext context, Block block) async {
             context: c,
             initialDate: start.isBefore(now) ? now : start,
             firstDate: today,
-            lastDate: today.add(const Duration(days: 365 * 5)),
+            lastDate: DateTime(today.year + 5, today.month, today.day),
           );
           if (date == null || !c.mounted) return;
           final time = await showTimePicker(context: c, initialTime: TimeOfDay.fromDateTime(start));

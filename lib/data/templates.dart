@@ -55,14 +55,14 @@ final pageTemplates = <PageTemplate>[
     );
   }),
   PageTemplate('Week ahead', 'Each day of the week, and what must get done', (today) {
-    final monday = today.subtract(Duration(days: today.weekday - 1));
+    final monday = DateTime(today.year, today.month, today.day - (today.weekday - 1));
     return NotePage(
       title: 'Week of ${monday.day} ${_months[monday.month - 1]}',
       paper: PaperStyle.blank,
       blocks: [
         for (var i = 0; i < 7; i++) ...[
           TextBlock(
-            text: '${_days[i].substring(0, 3)} ${monday.add(Duration(days: i)).day}',
+            text: '${_days[i].substring(0, 3)} ${DateTime(monday.year, monday.month, monday.day + i).day}',
             highlight: true,
             x: 48,
             y: 92 + i * 58,
