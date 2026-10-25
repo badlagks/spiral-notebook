@@ -18,6 +18,7 @@ import 'reminders_ui.dart';
 import 'search_dialog.dart';
 import 'section_lock.dart';
 import 'section_tabs.dart';
+import 'shelf_screen.dart';
 import 'store_scope.dart';
 import 'theme.dart';
 
@@ -133,9 +134,10 @@ class _TopBar extends StatelessWidget {
     final narrow = MediaQuery.sizeOf(context).width < 520;
     final left = store.pageIndex - store.pageIndex % 2;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 8, 0),
+      padding: const EdgeInsets.fromLTRB(4, 4, 8, 0),
       child: Row(
         children: [
+          _iconButton(Icons.collections_bookmark_outlined, 'All notebooks', () => showShelf(context)),
           Container(
             width: 10,
             height: 10,
@@ -388,10 +390,10 @@ class _Book extends StatelessWidget {
       padding: const EdgeInsets.all(_coverMargin),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Paper.cover, Paper.coverDark],
+          colors: [Color(store.notebook.cover), Paper.shade(Color(store.notebook.cover))],
         ),
         boxShadow: const [BoxShadow(color: Color(0x88000000), blurRadius: 24, offset: Offset(0, 12))],
       ),

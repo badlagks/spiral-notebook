@@ -26,6 +26,12 @@ abstract final class Paper {
   static const cover = Color(0xFF7A5A3A);
   static const coverDark = Color(0xFF4E3824);
   static const desk = Color(0xFF2E2B28);
+
+  /// The darker corner of a cover's leather.
+  static Color shade(Color c) {
+    final hsl = HSLColor.fromColor(c);
+    return hsl.withLightness((hsl.lightness * 0.64).clamp(0, 1)).toColor();
+  }
 }
 
 /// Colours for the buttons and text around the page: light on the dark

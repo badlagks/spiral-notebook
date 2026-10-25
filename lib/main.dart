@@ -60,14 +60,14 @@ class _NotebookAppState extends State<NotebookApp> with WidgetsBindingObserver {
         child: ValueListenableBuilder(
           valueListenable: widget.store.appearance,
           builder: (context, appearance, _) {
-            final (look, tone) = appearance;
+            final (look, tone, _) = appearance;
             Paper.look = look;
             Paper.tone = tone;
             return MaterialApp(
               title: 'Spiral Notebook',
               debugShowCheckedModeBanner: false,
               theme: buildTheme(),
-              // A new look redraws everything, paper included.
+              // A new look, or another notebook, redraws everything.
               home: NotebookScreen(key: ValueKey(appearance)),
             );
           },

@@ -5,8 +5,10 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/library.dart';
 import '../models/notebook.dart';
 import 'alarms/alarms.dart';
+import 'docs/doc_store.dart';
 import 'media/media_store.dart';
 import 'phone_calendar.dart';
 import 'sample_notebook.dart';
@@ -16,13 +18,22 @@ enum SaveState { saved, saving, failed }
 /// Holds the notebook in memory and saves it on the device a moment after
 /// each change. Widgets edit the models directly, then call [changed].
 class NotebookStore extends ChangeNotifier {
-  NotebookStore._(this.notebook, this._prefs);
+  NotebookStore._(this._notebook, this.shelf, this._docs);
 
-  static const _key = 'notebook.v1';
+  /// Where the single notebook was kept before there was a shelf.
+  static const _oldKey = 'notebook.v1';
+  static const _shelfDoc = 'library';
+  static String _doc(String id) => 'notebook-$id';
   static const _saveDelay = Duration(milliseconds: 600);
 
-  final Notebook notebook;
-  final SharedPreferences? _prefs;
+  Notebook _notebook;
+
+  /// The open notebook. Changes when another one is opened from the shelf.
+  Notebook get notebook => _notebook;
+
+  /// Every notebook on this device.
+  final Shelf shelf;
+  final DocStore? _docs;
   Timer? _saveTimer;
 
   /// Kept separate from the notebook so the save badge can update
@@ -30,12 +41,12 @@ class NotebookStore extends ChangeNotifier {
   final saveState = ValueNotifier(SaveState.saved);
 
   /// The chosen look and paper colour. The app rebuilds its screen on change.
-  late final appearance = ValueNotifier((notebook.look, notebook.tone));
+  late final appearance = ValueNotifier((notebook.look, notebook.tone, notebook.id));
 
   void setAppearance({Look? look, PaperTone? tone}) {
     notebook.look = look ?? notebook.look;
     notebook.tone = tone ?? notebook.tone;
-    appearance.value = (notebook.look, notebook.tone);
+    appearance.value = (notebook.look, notebook.tone, notebook.id);
     changed();
   }
 
@@ -87,37 +98,226 @@ class NotebookStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  static Future<NotebookStore> load() async {
-    SharedPreferences? prefs;
-    Notebook? nb;
-    try {
-      prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_key);
-      if (raw != null) {
-        nb = Notebook.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+  static Notebook? _parse(List<String> copies) {
+    for (final raw in copies) {
+      try {
+        final nb = Notebook.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+        nb.sections.expand((s) => s.pages).forEach((p) => p.placeUnplaced());
+        return nb;
+      } catch (e) {
+        debugPrint('A saved copy could not be read, trying the one before: $e');
       }
-      nb?.sections.expand((s) => s.pages).forEach((p) => p.placeUnplaced());
-    } catch (e) {
-      debugPrint('Could not load notebook, starting fresh: $e');
     }
-    final store = NotebookStore._(nb ?? sampleNotebook(), prefs);
-    store.purgeArchive(DateTime.now());
-    unawaited(alarms.init().then((_) => store.syncAlarms()));
-    // Photos and videos from erased widgets or long-gone pages. Only once
-    // the notebook loaded, so a damaged save never costs anyone their photos.
-    if (nb != null) {
-      unawaited(
-        mediaStore.removeAllExcept(store.notebook.mediaIds).catchError((Object e) {
-          debugPrint('Could not tidy media: $e');
-        }),
-      );
-    }
-    return store;
+    return null;
   }
+
+  static Future<Notebook?> _readNotebook(DocStore docs, String id) async => _parse(await docs.read(_doc(id)));
+
+  static ShelfEntry _entryFor(Notebook nb) =>
+      ShelfEntry(id: nb.id, title: nb.title, cover: nb.cover, updated: DateTime.now());
+
+  /// Opens the shelf and the notebook that was open last. The first time,
+  /// moves the notebook from where older versions of the app kept it.
+  static Future<NotebookStore> load({DocStore? docs}) async {
+    final store = docs ?? createDocStore();
+    Shelf? shelf;
+    Notebook? nb;
+    var allRead = true;
+    try {
+      for (final raw in await store.read(_shelfDoc)) {
+        try {
+          shelf = Shelf.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+          break;
+        } catch (e) {
+          debugPrint('The shelf could not be read, trying the one before: $e');
+        }
+      }
+      if (shelf == null) {
+        // First start on this version: bring over the old single notebook.
+        final prefs = await SharedPreferences.getInstance();
+        final old = prefs.getString(_oldKey);
+        nb = old == null ? null : _parse([old]);
+        if (old != null && nb == null) allRead = false;
+        nb ??= sampleNotebook();
+        shelf = Shelf(entries: [_entryFor(nb)], openId: nb.id);
+        await store.write(_doc(nb.id), jsonEncode(nb.toJson()));
+        await store.write(_shelfDoc, jsonEncode(shelf.toJson()));
+        // Kept until the new copy is safely written, then removed.
+        if (old != null && allRead) await prefs.remove(_oldKey);
+      } else {
+        nb = await _readNotebook(store, shelf.openId);
+        if (nb == null) {
+          allRead = false;
+          // The open one is unreadable: open another rather than lose data.
+          for (final e in shelf.notebooks) {
+            if (e.id == shelf.openId) continue;
+            nb = await _readNotebook(store, e.id);
+            if (nb != null) {
+              shelf.openId = nb.id;
+              break;
+            }
+          }
+        }
+        if (nb == null) {
+          nb = sampleNotebook();
+          shelf.entries.add(_entryFor(nb));
+          shelf.openId = nb.id;
+        }
+      }
+    } catch (e) {
+      debugPrint('Could not load the notebooks, starting fresh: $e');
+      allRead = false;
+      nb ??= sampleNotebook();
+      shelf ??= Shelf(entries: [_entryFor(nb)], openId: nb.id);
+    }
+    final s = NotebookStore._(nb, shelf, store);
+    s.purgeArchive(DateTime.now());
+    await s._purgeShelf(DateTime.now());
+    unawaited(alarms.init().then((_) => s.syncAlarms()));
+    // Photos and videos from erased widgets or long-gone pages. Only when
+    // every notebook read correctly, so a damaged save never costs anyone
+    // their photos.
+    if (allRead) unawaited(s._tidyMedia());
+    return s;
+  }
+
+  Future<void> _tidyMedia() async {
+    final docs = _docs;
+    if (docs == null) return;
+    try {
+      final keep = <String>{...notebook.mediaIds};
+      for (final e in shelf.entries) {
+        if (e.id == notebook.id) continue;
+        final nb = await _readNotebook(docs, e.id);
+        if (nb == null) return;
+        keep.addAll(nb.mediaIds);
+      }
+      await mediaStore.removeAllExcept(keep);
+    } catch (e) {
+      debugPrint('Could not tidy media: $e');
+    }
+  }
+
+  /// Deletes for good the notebooks deleted more than 30 days ago.
+  Future<void> _purgeShelf(DateTime now) async {
+    final gone = [
+      for (final e in shelf.recentlyDeleted)
+        if (!now.isBefore(e.deletedAt!.add(ShelfEntry.keepDeletedFor))) e,
+    ];
+    if (gone.isEmpty) return;
+    for (final e in gone) {
+      shelf.entries.remove(e);
+      await _docs?.delete(_doc(e.id));
+    }
+    await _writeShelf();
+  }
+
+  Future<void> _writeShelf() async => _docs?.write(_shelfDoc, jsonEncode(shelf.toJson()));
 
   /// An in-memory store for tests and previews.
   @visibleForTesting
-  factory NotebookStore.memory(Notebook nb) => NotebookStore._(nb, null);
+  factory NotebookStore.memory(Notebook nb, {DocStore? docs}) =>
+      NotebookStore._(nb, Shelf(entries: [_entryFor(nb)], openId: nb.id), docs);
+
+  /// Opens another notebook from the shelf.
+  Future<bool> openNotebook(String id) async {
+    if (id == notebook.id) return true;
+    await saveNow();
+    final docs = _docs;
+    final nb = docs == null ? null : await _readNotebook(docs, id);
+    if (nb == null) return false;
+    _switchTo(nb);
+    await _writeShelf();
+    return true;
+  }
+
+  void _switchTo(Notebook nb) {
+    _notebook = nb;
+    shelf.openId = nb.id;
+    _sectionIndex = 0;
+    _pageIndex = 0;
+    _unlocked.clear();
+    // Other notebooks' alarms stay set on the device; this one's are added.
+    _scheduled.clear();
+    purgeArchive(DateTime.now());
+    appearance.value = (nb.look, nb.tone, nb.id);
+    notifyListeners();
+    unawaited(syncAlarms());
+  }
+
+  /// Puts a new notebook on the shelf and opens it.
+  Future<void> newNotebook({required String title, required int cover, Notebook? from}) async {
+    await saveNow();
+    final nb = from ?? Notebook(title: title, cover: cover, sections: [Section(name: 'Notes', color: 0xFFE57373)]);
+    nb
+      ..title = title
+      ..cover = cover;
+    shelf.entries.insert(0, _entryFor(nb));
+    await _docs?.write(_doc(nb.id), jsonEncode(nb.toJson()));
+    _switchTo(nb);
+    await _writeShelf();
+  }
+
+  /// Renames a notebook or changes its cover, open or not.
+  Future<void> editNotebook(String id, {String? title, int? cover}) async {
+    final e = shelf.find(id);
+    if (e == null) return;
+    if (id == notebook.id) {
+      notebook.title = title ?? notebook.title;
+      notebook.cover = cover ?? notebook.cover;
+      changed();
+      await saveNow();
+      return;
+    }
+    final docs = _docs;
+    final nb = docs == null ? null : await _readNotebook(docs, id);
+    if (nb == null) return;
+    nb.title = title ?? nb.title;
+    nb.cover = cover ?? nb.cover;
+    e
+      ..title = nb.title
+      ..cover = nb.cover;
+    await docs!.write(_doc(id), jsonEncode(nb.toJson()));
+    await _writeShelf();
+    notifyListeners();
+  }
+
+  /// Moves a notebook to "Recently deleted". The last one can't be deleted.
+  Future<bool> deleteNotebook(String id) async {
+    final e = shelf.find(id);
+    if (e == null || shelf.notebooks.length <= 1) return false;
+    e.deletedAt = DateTime.now();
+    if (id == notebook.id) {
+      await saveNow();
+      final next = shelf.notebooks.first;
+      final docs = _docs;
+      final nb = docs == null ? null : await _readNotebook(docs, next.id);
+      if (nb == null) {
+        e.deletedAt = null;
+        return false;
+      }
+      // Its reminders stop ringing while it's deleted.
+      for (final id in _scheduled.keys) {
+        await alarms.cancel(id);
+      }
+      _switchTo(nb);
+    } else if (_docs case final docs?) {
+      final nb = await _readNotebook(docs, id);
+      for (final b in nb?.sections.expand((s) => s.pages).expand((p) => p.blocks) ?? const <Block>[]) {
+        if (b.reminder != null) await alarms.cancel(Reminder.alarmId(b.id));
+      }
+    }
+    await _writeShelf();
+    notifyListeners();
+    return true;
+  }
+
+  /// Brings a notebook back from "Recently deleted".
+  Future<void> restoreNotebook(String id) async {
+    shelf.find(id)?.deletedAt = null;
+    await _writeShelf();
+    notifyListeners();
+  }
 
   List<Section> get sections => notebook.sections;
   int get sectionIndex => _sectionIndex;
@@ -247,6 +447,7 @@ class NotebookStore extends ChangeNotifier {
   void replaceWith(Notebook nb) {
     notebook
       ..title = nb.title
+      ..cover = nb.cover
       ..look = nb.look
       ..tone = nb.tone
       ..showPhoneCalendar = nb.showPhoneCalendar;
@@ -259,7 +460,7 @@ class NotebookStore extends ChangeNotifier {
     _sectionIndex = 0;
     _pageIndex = 0;
     _unlocked.clear();
-    appearance.value = (notebook.look, notebook.tone);
+    appearance.value = (notebook.look, notebook.tone, notebook.id);
     changed();
   }
 
@@ -413,7 +614,7 @@ class NotebookStore extends ChangeNotifier {
   void changedQuietly() => _scheduleSave();
 
   void _scheduleSave() {
-    if (_prefs == null) return;
+    if (_docs == null) return;
     _saveTimer?.cancel();
     saveState.value = SaveState.saving;
     _saveTimer = Timer(_saveDelay, saveNow);
@@ -421,13 +622,20 @@ class NotebookStore extends ChangeNotifier {
 
   Future<void> saveNow() async {
     _saveTimer?.cancel();
-    final prefs = _prefs;
-    if (prefs == null) return;
+    final docs = _docs;
+    if (docs == null) return;
     try {
-      final ok = await prefs.setString(_key, jsonEncode(notebook.toJson()));
+      await docs.write(_doc(notebook.id), jsonEncode(notebook.toJson()));
+      var e = shelf.find(notebook.id);
+      if (e == null) shelf.entries.add(e = _entryFor(notebook));
+      e
+        ..title = notebook.title
+        ..cover = notebook.cover
+        ..updated = DateTime.now();
+      await _writeShelf();
       // Erased widgets and torn-out pages stop ringing.
       unawaited(syncAlarms());
-      saveState.value = ok ? SaveState.saved : SaveState.failed;
+      saveState.value = SaveState.saved;
     } catch (e) {
       debugPrint('Save failed: $e');
       saveState.value = SaveState.failed;

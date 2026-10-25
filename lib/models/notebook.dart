@@ -685,16 +685,26 @@ enum Look { notebook, plain }
 /// The colour of the paper.
 enum PaperTone { cream, white }
 
+/// Leather colours a notebook's cover can have. The first is the classic brown.
+const coverColors = [0xFF7A5A3A, 0xFF2F4A6D, 0xFF3F5E45, 0xFF7A2E35, 0xFF3A3A3F, 0xFF2E6B6B, 0xFFA0782C, 0xFF5B3F6E];
+
 class Notebook {
   Notebook({
+    String? id,
+    this.cover = 0xFF7A5A3A,
     required this.title,
     required this.sections,
     List<ArchivedPage>? archive,
     this.look = Look.notebook,
     this.tone = PaperTone.cream,
     this.showPhoneCalendar = false,
-  }) : archive = archive ?? [];
+  }) : id = id ?? newId(),
+       archive = archive ?? [];
 
+  final String id;
+
+  /// The cover's leather colour (ARGB).
+  int cover;
   String title;
   Look look;
   PaperTone tone;
@@ -717,6 +727,8 @@ class Notebook {
 
   Map<String, dynamic> toJson() => {
     'version': 2,
+    'id': id,
+    'cover': cover,
     'title': title,
     'look': look.name,
     'tone': tone.name,
@@ -726,6 +738,8 @@ class Notebook {
   };
 
   factory Notebook.fromJson(Map<String, dynamic> j) => Notebook(
+    id: j['id'] as String?,
+    cover: j['cover'] as int? ?? coverColors.first,
     title: j['title'] as String? ?? 'My Notebook',
     look: Look.values.asNameMap()[j['look']] ?? Look.notebook,
     tone: PaperTone.values.asNameMap()[j['tone']] ?? PaperTone.cream,
