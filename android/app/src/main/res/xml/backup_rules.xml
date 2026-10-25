@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and older: the phone's own backup keeps the notebooks and
+     their daily copies. Photos and videos are left out, since the backup
+     has a size limit; "Back up notebook" in the app includes them. -->
+<full-backup-content>
+    <include domain="file" path="notebooks/" />
+</full-backup-content>

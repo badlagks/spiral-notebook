@@ -264,6 +264,7 @@ class NotebookStore extends ChangeNotifier {
     final s = NotebookStore._(nb, shelf, store);
     s.purgeArchive(DateTime.now());
     await s._purgeShelf(DateTime.now());
+    await s._keepDailyCopy(s._committed);
     unawaited(alarms.init().then((_) => s.syncAlarms()));
     // Photos and videos from erased widgets or long-gone pages. Only when
     // every notebook read correctly, so a damaged save never costs anyone
@@ -283,6 +284,11 @@ class NotebookStore extends ChangeNotifier {
         if (nb == null) return;
         keep.addAll(nb.mediaIds);
       }
+      // Earlier versions keep their photos too. One that can't be read has
+      // nothing to keep.
+      for (final name in await docs.list('daily-')) {
+        keep.addAll(_parse(await docs.read(name))?.mediaIds ?? const {});
+      }
       await mediaStore.removeAllExcept(keep);
     } catch (e) {
       debugPrint('Could not tidy media: $e');
@@ -299,8 +305,55 @@ class NotebookStore extends ChangeNotifier {
     for (final e in gone) {
       shelf.entries.remove(e);
       await _docs?.delete(_doc(e.id));
+      for (final name in await _docs?.list(_dailyPrefix(e.id)) ?? const <String>[]) {
+        await _docs?.delete(name);
+      }
     }
     await _writeShelf();
+  }
+
+  // A copy of each notebook for each of the last few days it was opened,
+  // kept on the device so a bad day can be undone.
+  static const keepDailyCopies = 7;
+  static String _dailyPrefix(String id) => 'daily-$id-';
+  static String _dayName(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  String? _dailyCopyDay;
+
+  /// Keeps [text] as today's copy if there isn't one yet, and lets the
+  /// oldest go.
+  Future<void> _keepDailyCopy(String text) async {
+    final docs = _docs;
+    final today = _dayName(DateTime.now());
+    if (docs == null || _dailyCopyDay == '${notebook.id}/$today') return;
+    try {
+      final prefix = _dailyPrefix(notebook.id);
+      final names = (await docs.list(prefix))..sort();
+      if (!names.contains('$prefix$today')) {
+        await docs.write('$prefix$today', text);
+        names.add('$prefix$today');
+      }
+      for (final old in names.take(names.length - keepDailyCopies)) {
+        await docs.delete(old);
+      }
+      _dailyCopyDay = '${notebook.id}/$today';
+    } catch (e) {
+      debugPrint('Could not keep the daily copy: $e');
+    }
+  }
+
+  /// The open notebook's earlier versions, newest first.
+  Future<List<DailyCopy>> dailyCopies() async {
+    final docs = _docs;
+    if (docs == null) return [];
+    final prefix = _dailyPrefix(notebook.id);
+    final out = <DailyCopy>[];
+    for (final name in await docs.list(prefix)) {
+      final day = DateTime.tryParse(name.substring(prefix.length));
+      final nb = day == null ? null : _parse(await docs.read(name));
+      if (day != null && nb != null) out.add(DailyCopy(day, nb));
+    }
+    return out..sort((a, b) => b.day.compareTo(a.day));
   }
 
   Future<void> _writeShelf() async => _docs?.write(_shelfDoc, jsonEncode(shelf.toJson()));
@@ -335,6 +388,7 @@ class NotebookStore extends ChangeNotifier {
     _resetHistory();
     notifyListeners();
     unawaited(syncAlarms());
+    unawaited(_keepDailyCopy(_committed));
   }
 
   /// Puts a new notebook on the shelf and opens it.
@@ -727,7 +781,10 @@ class NotebookStore extends ChangeNotifier {
     final docs = _docs;
     if (docs == null) return;
     try {
-      await docs.write(_doc(notebook.id), checkpoint());
+      final text = checkpoint();
+      await docs.write(_doc(notebook.id), text);
+      // Left open overnight, the first save of the new day keeps a copy too.
+      await _keepDailyCopy(text);
       var e = shelf.find(notebook.id);
       if (e == null) shelf.entries.add(e = _entryFor(notebook));
       e
@@ -772,6 +829,13 @@ class NotebookStore extends ChangeNotifier {
     history.dispose();
     super.dispose();
   }
+}
+
+/// The notebook as it was on [day], kept on the device.
+class DailyCopy {
+  DailyCopy(this.day, this.notebook);
+  final DateTime day;
+  final Notebook notebook;
 }
 
 /// A reminder and where it lives.

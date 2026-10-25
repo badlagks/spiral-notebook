@@ -222,6 +222,7 @@ class _MoreMenu extends StatelessWidget {
         'redo' => StoreScope.read(context).redo(),
         'look' => showLookPicker(context),
         'backup' => backUpNotebook(context),
+        'versions' => showEarlierVersions(context),
         'restore' => restoreNotebook(context),
         'pdf' => importPdf(context),
         _ => null,
@@ -243,6 +244,10 @@ class _MoreMenu extends StatelessWidget {
         const PopupMenuItem(
           value: 'backup',
           child: ListTile(leading: Icon(Icons.save_alt), title: Text('Back up notebook')),
+        ),
+        const PopupMenuItem(
+          value: 'versions',
+          child: ListTile(leading: Icon(Icons.history), title: Text('Earlier versions')),
         ),
         const PopupMenuItem(
           value: 'restore',

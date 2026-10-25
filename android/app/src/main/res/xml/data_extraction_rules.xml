@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 and newer. The phone's backup keeps the notebooks and their
+     daily copies; moving to a new phone by cable or Wi-Fi brings
+     everything, photos and videos included. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="file" path="notebooks/" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="file" path="." />
+        <include domain="sharedpref" path="." />
+    </device-transfer>
+</data-extraction-rules>

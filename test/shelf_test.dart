@@ -101,6 +101,34 @@ void main() {
     expect(docs.docs.containsKey('notebook-$old'), isFalse);
   });
 
+  test('a copy is kept each day, only the last 7, and can be put back', () async {
+    SharedPreferences.setMockInitialValues({});
+    final docs = MemoryDocStore();
+    final store = await NotebookStore.load(docs: docs);
+    final id = store.notebook.id;
+    expect(docs.docs.keys.where((n) => n.startsWith('daily-$id-')), hasLength(1));
+
+    // Ten older days already kept.
+    for (var d = 1; d <= 10; d++) {
+      final day = DateTime(2026, 1, d);
+      final copy = sampleNotebook()..title = 'Day $d';
+      await docs.write(
+        'daily-$id-${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}',
+        jsonEncode(copy.toJson()),
+      );
+    }
+    final again = await NotebookStore.load(docs: docs);
+    final copies = await again.dailyCopies();
+    expect(copies, hasLength(7));
+    expect(copies.last.notebook.title, 'Day 5');
+
+    again.replaceWith(copies.last.notebook);
+    expect(again.notebook.title, 'Day 5');
+    expect(again.notebook.id, id);
+    again.undo();
+    expect(again.notebook.title, isNot('Day 5'));
+  });
+
   testWidgets('the shelf makes a new notebook and switches back', (tester) async {
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
