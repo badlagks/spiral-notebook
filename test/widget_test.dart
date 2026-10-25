@@ -1,10 +1,13 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spiral_notebook/data/notebook_store.dart';
 import 'package:spiral_notebook/data/sample_notebook.dart';
 import 'package:spiral_notebook/main.dart';
 import 'package:spiral_notebook/models/notebook.dart';
+import 'package:spiral_notebook/ui/ink.dart';
 import 'package:spiral_notebook/ui/page_flip.dart';
+import 'package:spiral_notebook/ui/paper_page.dart';
 import 'package:spiral_notebook/ui/blocks/calculator_view.dart';
 
 Future<NotebookStore> pumpApp(WidgetTester tester, Size size) async {
@@ -146,5 +149,61 @@ void main() {
     await tester.pumpAndSettle();
     expect(store.archive, isEmpty);
     expect(store.page.title, 'Draft Outline');
+  });
+
+  testWidgets('drawing mode draws with a finger, and undo takes it back', (tester) async {
+    final store = await pumpApp(tester, const Size(390, 844));
+    final page = store.page;
+    await tester.tap(find.byTooltip('Draw on the paper'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DrawToolbar), findsOneWidget);
+
+    final center = tester.getCenter(find.byType(PaperPage));
+    final g = await tester.startGesture(center, kind: PointerDeviceKind.touch);
+    for (var i = 1; i <= 10; i++) {
+      await g.moveTo(center + Offset(i * 8.0, i * 3.0));
+    }
+    await g.up();
+    await tester.pump();
+    expect(page.strokes, hasLength(1));
+    expect(page.strokes.single.points.length, greaterThan(5));
+
+    await tester.tap(find.byTooltip('Undo'));
+    await tester.pump();
+    expect(page.strokes, isEmpty);
+    await tester.tap(find.byTooltip('Redo'));
+    await tester.pump();
+    expect(page.strokes, hasLength(1));
+
+    // The eraser removes a line it touches.
+    await tester.tap(find.byTooltip('Eraser: touch a line to remove it'));
+    await tester.pump();
+    await tester.tapAt(center + const Offset(40, 15));
+    await tester.pump();
+    expect(page.strokes, isEmpty);
+
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DrawToolbar), findsNothing);
+  });
+
+  testWidgets('a stylus draws without drawing mode, then fingers stop drawing', (tester) async {
+    final store = await pumpApp(tester, const Size(390, 844));
+    final page = store.page;
+    final at = tester.getCenter(find.byType(PaperPage)) + const Offset(0, 120);
+    var g = await tester.startGesture(at, kind: PointerDeviceKind.stylus);
+    await g.moveTo(at + const Offset(30, 0));
+    await g.moveTo(at + const Offset(60, 5));
+    await g.up();
+    await tester.pump();
+    expect(page.strokes, hasLength(1));
+
+    await tester.tap(find.byTooltip('Draw on the paper'));
+    await tester.pumpAndSettle();
+    g = await tester.startGesture(at + const Offset(0, 40), kind: PointerDeviceKind.touch);
+    await g.moveTo(at + const Offset(50, 40));
+    await g.up();
+    await tester.pump();
+    expect(page.strokes, hasLength(1), reason: 'a palm or finger leaves no marks once a pen is used');
   });
 }

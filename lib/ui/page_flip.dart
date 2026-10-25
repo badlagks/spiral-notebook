@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../models/notebook.dart';
+import 'ink.dart';
 import 'paper_painters.dart';
 import 'store_scope.dart';
 import 'theme.dart';
@@ -261,6 +262,18 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
   }
 
   Widget _grab(int dir, {required bool cornerOnLeft, bool showCorner = true}) {
+    // While drawing, the page edges are for ink; the corner still turns pages.
+    if (InkScope.of(context).drawing) {
+      return Align(
+        alignment: cornerOnLeft ? Alignment.bottomLeft : Alignment.bottomRight,
+        child: showCorner && _dir == 0
+            ? GestureDetector(
+                onTap: () => _turn(dir),
+                child: CustomPaint(size: const Size(30, 30), painter: _CornerPainter(onLeft: cornerOnLeft)),
+              )
+            : null,
+      );
+    }
     final enabled = _dir == 0 || _dir == dir;
     return Semantics(
       button: true,

@@ -46,25 +46,100 @@ class Section {
       );
 }
 
+enum InkTool { pen, highlighter }
+
+/// One point of a drawn line, in paper units, with pen pressure from 0 to 1.
+class InkPoint {
+  const InkPoint(this.x, this.y, [this.pressure = 0.5]);
+  final double x;
+  final double y;
+  final double pressure;
+}
+
+/// One line drawn on the paper with a finger, mouse or pen.
+class InkStroke {
+  InkStroke({String? id, required this.tool, required this.color, required this.width, List<InkPoint>? points})
+      : id = id ?? newId(),
+        points = points ?? [];
+
+  final String id;
+  final InkTool tool;
+  final int color;
+  final double width;
+  final List<InkPoint> points;
+
+  static double _round(double v) => (v * 10).roundToDouble() / 10;
+
+  /// Points are stored flat as x, y, pressure to keep notebooks small.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'tool': tool.name,
+        'color': color,
+        'width': width,
+        'points': [
+          for (final p in points) ...[_round(p.x), _round(p.y), (p.pressure * 100).roundToDouble() / 100],
+        ],
+      };
+
+  factory InkStroke.fromJson(Map<String, dynamic> j) {
+    final flat = (j['points'] as List).map((n) => (n as num).toDouble()).toList();
+    return InkStroke(
+      id: j['id'] as String,
+      tool: InkTool.values.asNameMap()[j['tool']] ?? InkTool.pen,
+      color: j['color'] as int,
+      width: (j['width'] as num).toDouble(),
+      points: [for (var i = 0; i + 2 < flat.length; i += 3) InkPoint(flat[i], flat[i + 1], flat[i + 2])],
+    );
+  }
+
+  /// Whether any part of the line passes within [radius] of [x], [y].
+  bool passesNear(double x, double y, double radius) {
+    final r = radius + width / 2;
+    if (points.length == 1) {
+      final p = points.first;
+      return (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y) <= r * r;
+    }
+    for (var i = 1; i < points.length; i++) {
+      if (_segmentDistance(points[i - 1], points[i], x, y) <= r) return true;
+    }
+    return false;
+  }
+
+  static double _segmentDistance(InkPoint a, InkPoint b, double x, double y) {
+    final dx = b.x - a.x, dy = b.y - a.y;
+    final len2 = dx * dx + dy * dy;
+    var t = len2 == 0 ? 0.0 : ((x - a.x) * dx + (y - a.y) * dy) / len2;
+    t = t.clamp(0.0, 1.0);
+    final px = a.x + t * dx - x, py = a.y + t * dy - y;
+    return sqrt(px * px + py * py);
+  }
+}
+
 class NotePage {
   NotePage({
     String? id,
     this.title = '',
     this.paper = PaperStyle.ruled,
     List<Block>? blocks,
+    List<InkStroke>? strokes,
   })  : id = id ?? newId(),
-        blocks = blocks ?? [];
+        blocks = blocks ?? [],
+        strokes = strokes ?? [];
 
   final String id;
   String title;
   PaperStyle paper;
   final List<Block> blocks;
 
+  /// Drawing on the paper, oldest first. Drawn above the widgets.
+  final List<InkStroke> strokes;
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'title': title,
         'paper': paper.name,
         'blocks': blocks.map((b) => b.toJson()).toList(),
+        if (strokes.isNotEmpty) 'strokes': strokes.map((s) => s.toJson()).toList(),
       };
 
   factory NotePage.fromJson(Map<String, dynamic> j) => NotePage(
@@ -73,6 +148,9 @@ class NotePage {
         paper: PaperStyle.values.asNameMap()[j['paper']] ?? PaperStyle.ruled,
         blocks: (j['blocks'] as List)
             .map((b) => Block.fromJson(b as Map<String, dynamic>))
+            .toList(),
+        strokes: ((j['strokes'] as List?) ?? [])
+            .map((s) => InkStroke.fromJson(s as Map<String, dynamic>))
             .toList(),
       );
 

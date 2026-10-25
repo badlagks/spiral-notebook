@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../data/notebook_store.dart';
 import 'archive_dialog.dart';
+import 'ink.dart';
 import 'page_flip.dart';
 import 'paper_page.dart';
 import 'search_dialog.dart';
@@ -60,7 +61,20 @@ class _NotebookScreenState extends State<NotebookScreen> {
                 child: Column(
                   children: [
                     _TopBar(spread: spread, flip: _flip),
-                    Expanded(child: _Book(spread: spread, flip: _flip)),
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          Positioned.fill(child: _Book(spread: spread, flip: _flip)),
+                          if (InkScope.of(context).drawing)
+                            const Positioned(
+                              left: 8,
+                              right: 8,
+                              bottom: 8,
+                              child: Center(child: DrawToolbar()),
+                            ),
+                        ],
+                      ),
+                    ),
                     if (!spread) _PageBar(flip: _flip),
                   ],
                 ),
@@ -110,6 +124,8 @@ class _TopBar extends StatelessWidget {
           const Spacer(),
           const _SaveBadge(),
           const SizedBox(width: 4),
+          const _DrawButton(),
+          const SizedBox(width: 4),
           _ArchiveButton(count: store.archive.length),
           if (spread && !narrow)
             Padding(
@@ -145,6 +161,30 @@ Widget _iconButton(IconData icon, String tip, VoidCallback? onTap) => IconButton
       onPressed: onTap,
       icon: Icon(icon),
     );
+
+/// Switches between writing (tap widgets, type) and drawing on the paper.
+class _DrawButton extends StatelessWidget {
+  const _DrawButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = InkScope.of(context);
+    return IconButton(
+      tooltip: ink.drawing ? 'Stop drawing' : 'Draw on the paper',
+      visualDensity: VisualDensity.compact,
+      isSelected: ink.drawing,
+      style: IconButton.styleFrom(
+        backgroundColor: ink.drawing ? Colors.white : null,
+        foregroundColor: ink.drawing ? const Color(0xFF1F3A73) : Colors.white70,
+      ),
+      onPressed: () {
+        FocusScope.of(context).unfocus();
+        ink.drawing = !ink.drawing;
+      },
+      icon: const Icon(Icons.draw_outlined),
+    );
+  }
+}
 
 class _ArchiveButton extends StatelessWidget {
   const _ArchiveButton({required this.count});

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models/notebook.dart';
 import 'blocks/block_content.dart';
 import 'blocks/sticky_view.dart';
+import 'ink.dart';
 import 'paper_painters.dart';
 import 'store_scope.dart';
 import 'theme.dart';
@@ -110,6 +111,8 @@ class _PaperPageState extends State<PaperPage> {
                 onRemoved: () => setState(() => _selected = null),
                 child: blockContent(block, autofocus: block.id == _justAdded),
               ),
+            // Drawing sits above the widgets, like ink on top of the paper.
+            Positioned.fill(child: InkLayer(page: _page, interactive: widget.interactive)),
             if (widget.pageNumber > 0)
               Positioned(
               left: 0,

@@ -178,4 +178,32 @@ void main() {
       expect(store.page.title, 'This week');
     });
   });
+
+  group('ink', () {
+    test('a stroke survives a save and load, rounded small', () {
+      final s = InkStroke(tool: InkTool.highlighter, color: 0xFFFFEB3B, width: 13, points: [
+        const InkPoint(10.04, 20.06, 0.333),
+        const InkPoint(30, 40, 1),
+      ]);
+      final copy = InkStroke.fromJson(jsonDecode(jsonEncode(s.toJson())) as Map<String, dynamic>);
+      expect(copy.tool, InkTool.highlighter);
+      expect(copy.points.first.x, 10.0);
+      expect(copy.points.first.y, 20.1);
+      expect(copy.points.first.pressure, 0.33);
+      expect(copy.points.last.y, 40);
+    });
+
+    test('the eraser finds lines it touches', () {
+      final s = InkStroke(tool: InkTool.pen, color: 0, width: 2, points: [const InkPoint(0, 0), const InkPoint(100, 0)]);
+      expect(s.passesNear(50, 5, 4), isTrue);
+      expect(s.passesNear(50, 20, 4), isFalse);
+      expect(s.passesNear(120, 0, 4), isFalse);
+    });
+
+    test('pages without drawing load as before', () {
+      final page = NotePage.fromJson({'id': 'p', 'title': '', 'paper': 'ruled', 'blocks': []});
+      expect(page.strokes, isEmpty);
+      expect(page.toJson().containsKey('strokes'), isFalse);
+    });
+  });
 }

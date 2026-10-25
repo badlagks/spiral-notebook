@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'data/notebook_store.dart';
+import 'ui/ink.dart';
 import 'ui/notebook_screen.dart';
 import 'ui/store_scope.dart';
 import 'ui/theme.dart';
@@ -21,6 +22,8 @@ class NotebookApp extends StatefulWidget {
 }
 
 class _NotebookAppState extends State<NotebookApp> with WidgetsBindingObserver {
+  final _ink = InkController();
+
   @override
   void initState() {
     super.initState();
@@ -38,6 +41,7 @@ class _NotebookAppState extends State<NotebookApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _ink.dispose();
     super.dispose();
   }
 
@@ -45,11 +49,14 @@ class _NotebookAppState extends State<NotebookApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return StoreScope(
       store: widget.store,
-      child: MaterialApp(
-        title: 'Spiral Notebook',
-        debugShowCheckedModeBanner: false,
-        theme: buildTheme(),
-        home: const NotebookScreen(),
+      child: InkScope(
+        controller: _ink,
+        child: MaterialApp(
+          title: 'Spiral Notebook',
+          debugShowCheckedModeBanner: false,
+          theme: buildTheme(),
+          home: const NotebookScreen(),
+        ),
       ),
     );
   }
