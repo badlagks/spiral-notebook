@@ -252,11 +252,11 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
         width: spineWidth,
         height: pageHeight,
         child: Paper.plain
-            // Plain paper just has a soft fold down the middle.
+            // Plain paper just has a faint fold down the middle.
             ? DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Paper.sheet, Color.lerp(Paper.sheet, Colors.black, 0.07)!, Paper.sheet],
+                    colors: [Paper.sheet, Color.lerp(Paper.sheet, Colors.black, 0.035)!, Paper.sheet],
                   ),
                 ),
               )

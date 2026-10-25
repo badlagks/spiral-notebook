@@ -211,13 +211,16 @@ class _PaperPageState extends State<PaperPage> {
         }
       },
       itemBuilder: (_) => [
-        for (final style in PaperStyle.values)
-          CheckedPopupMenuItem(
-            value: style.name,
-            checked: _page.paper == style,
-            child: Text('${style.name[0].toUpperCase()}${style.name.substring(1)} paper'),
-          ),
-        const PopupMenuDivider(),
+        // Plain paper has no lines, so there is nothing to choose.
+        if (!Paper.plain) ...[
+          for (final style in PaperStyle.values)
+            CheckedPopupMenuItem(
+              value: style.name,
+              checked: _page.paper == style,
+              child: Text('${style.name[0].toUpperCase()}${style.name.substring(1)} paper'),
+            ),
+          const PopupMenuDivider(),
+        ],
         const PopupMenuItem(value: 'tear', child: Text('Tear out this page')),
       ],
     );

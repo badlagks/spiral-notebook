@@ -30,7 +30,8 @@ class PaperPainter extends CustomPainter {
     final rect = Offset.zero & size;
     canvas.drawRect(rect, Paint()..color = sheet);
 
-    switch (style) {
+    // Plain paper is clean: no lines or squares at all.
+    switch (aged ? style : PaperStyle.blank) {
       case PaperStyle.ruled:
         final line = Paint()
           ..color = Paper.ruleLine

@@ -47,7 +47,7 @@ class _LookDialogState extends State<_LookDialog> {
                   ),
                   _Choice(
                     label: 'Plain paper',
-                    detail: 'Just the page, filling the screen',
+                    detail: 'Clean paper with no lines, filling the screen',
                     selected: _look == Look.plain,
                     onTap: () => setState(() => _look = Look.plain),
                     preview: _Preview(look: Look.plain, tone: _tone),
@@ -149,7 +149,7 @@ class _Preview extends StatelessWidget {
     final sheet = tone == PaperTone.white ? Paper.white : Paper.cream;
     Widget page() => DecoratedBox(
           decoration: BoxDecoration(color: sheet),
-          child: CustomPaint(painter: _MiniLines(margin: look == Look.notebook)),
+          child: look == Look.notebook ? const CustomPaint(painter: _MiniLines()) : null,
         );
     if (look == Look.plain) {
       return DecoratedBox(
@@ -187,8 +187,7 @@ class _Preview extends StatelessWidget {
 }
 
 class _MiniLines extends CustomPainter {
-  const _MiniLines({required this.margin});
-  final bool margin;
+  const _MiniLines();
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -198,11 +197,9 @@ class _MiniLines extends CustomPainter {
     for (var y = 14.0; y < size.height - 2; y += 7) {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), line);
     }
-    if (margin) {
-      canvas.drawLine(const Offset(10, 0), Offset(10, size.height), Paint()..color = Paper.margin);
-    }
+    canvas.drawLine(const Offset(10, 0), Offset(10, size.height), Paint()..color = Paper.margin);
   }
 
   @override
-  bool shouldRepaint(_MiniLines old) => old.margin != margin;
+  bool shouldRepaint(_MiniLines old) => false;
 }
