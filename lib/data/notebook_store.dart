@@ -25,6 +25,16 @@ class NotebookStore extends ChangeNotifier {
   /// without rebuilding the pages.
   final saveState = ValueNotifier(SaveState.saved);
 
+  /// The chosen look and paper colour. The app rebuilds its screen on change.
+  late final appearance = ValueNotifier((notebook.look, notebook.tone));
+
+  void setAppearance({Look? look, PaperTone? tone}) {
+    notebook.look = look ?? notebook.look;
+    notebook.tone = tone ?? notebook.tone;
+    appearance.value = (notebook.look, notebook.tone);
+    changed();
+  }
+
   int _sectionIndex = 0;
   int _pageIndex = 0;
 
@@ -253,6 +263,7 @@ class NotebookStore extends ChangeNotifier {
   void dispose() {
     _saveTimer?.cancel();
     saveState.dispose();
+    appearance.dispose();
     super.dispose();
   }
 }

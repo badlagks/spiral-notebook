@@ -8,6 +8,7 @@ import 'package:spiral_notebook/models/notebook.dart';
 import 'package:spiral_notebook/ui/ink.dart';
 import 'package:spiral_notebook/ui/page_flip.dart';
 import 'package:spiral_notebook/ui/paper_page.dart';
+import 'package:spiral_notebook/ui/section_tabs.dart';
 import 'package:spiral_notebook/ui/blocks/calculator_view.dart';
 
 Future<NotebookStore> pumpApp(WidgetTester tester, Size size) async {
@@ -224,5 +225,30 @@ void main() {
     await g.up();
     await tester.pump();
     expect(page.strokes, hasLength(1), reason: 'a palm or finger leaves no marks once a pen is used');
+  });
+
+  testWidgets('plain white paper can be chosen instead of the notebook', (tester) async {
+    final store = await pumpApp(tester, const Size(1400, 900));
+    expect(find.byType(SectionTabs), findsOneWidget);
+    await tester.tap(find.byTooltip('Look and paper colour'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Plain paper'));
+    await tester.tap(find.text('White'));
+    await tester.tap(find.text('Use this look'));
+    await tester.pumpAndSettle();
+
+    expect(store.notebook.look, Look.plain);
+    expect(store.notebook.tone, PaperTone.white);
+    expect(find.byType(SectionTabs), findsNothing);
+    expect(find.byType(SectionChips), findsOneWidget);
+    expect(find.text('Draft Outline'), findsOneWidget);
+    await tester.tap(find.text('Finances'));
+    await tester.pumpAndSettle();
+    expect(store.section.name, 'Finances');
+
+    final again = Notebook.fromJson(store.notebook.toJson());
+    expect(again.look, Look.plain);
+    expect(again.tone, PaperTone.white);
+    expect(tester.takeException(), isNull);
   });
 }

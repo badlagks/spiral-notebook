@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/sample_notebook.dart';
 import '../models/notebook.dart';
 import 'store_scope.dart';
+import 'theme.dart';
 
 /// Colored index tabs sticking out of the notebook's right edge.
 class SectionTabs extends StatelessWidget {
@@ -39,6 +40,87 @@ class SectionTabs extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The sections as a row of coloured labels, for the plain paper look.
+class SectionChips extends StatelessWidget {
+  const SectionChips({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    return SizedBox(
+      height: 40,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        children: [
+          for (var i = 0; i < store.sections.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: _Chip(
+                section: store.sections[i],
+                selected: i == store.sectionIndex,
+                onTap: () => store.openSection(i),
+                onEdit: () => showSectionEditor(context, store.sections[i]),
+              ),
+            ),
+          IconButton(
+            tooltip: 'New section',
+            iconSize: 20,
+            visualDensity: VisualDensity.compact,
+            color: Chrome.normal,
+            onPressed: () => showSectionEditor(context, null),
+            icon: const Icon(Icons.add_circle_outline),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  const _Chip({required this.section, required this.selected, required this.onTap, required this.onEdit});
+
+  final Section section;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Color(section.color);
+    return Tooltip(
+      message: '${section.name} · long-press or right-click to edit',
+      child: GestureDetector(
+        onLongPress: onEdit,
+        onSecondaryTap: onEdit,
+        child: Material(
+          color: selected ? color : color.withValues(alpha: 0.28),
+          shape: const StadiumBorder(),
+          child: InkWell(
+            customBorder: const StadiumBorder(),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              child: Center(
+                widthFactor: 1,
+                child: Text(
+                  section.name,
+                  style: TextStyle(
+                    fontFamily: 'Kalam',
+                    fontSize: 15,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                    color: const Color(0xFF2B2B2B),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../data/notebook_store.dart';
 import 'archive_dialog.dart';
 import 'ink.dart';
+import 'look_picker.dart';
 import 'page_flip.dart';
 import 'paper_page.dart';
 import 'search_dialog.dart';
@@ -50,13 +51,15 @@ class _NotebookScreenState extends State<NotebookScreen> {
           autofocus: true,
           child: Scaffold(
             body: DecoratedBox(
-              decoration: const BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment(0, -0.3),
-                  radius: 1.2,
-                  colors: [Color(0xFF4A4540), Paper.desk],
-                ),
-              ),
+              decoration: Paper.plain
+                  ? BoxDecoration(color: Paper.sheet)
+                  : const BoxDecoration(
+                      gradient: RadialGradient(
+                        center: Alignment(0, -0.3),
+                        radius: 1.2,
+                        colors: [Color(0xFF4A4540), Paper.desk],
+                      ),
+                    ),
               child: SafeArea(
                 child: Column(
                   children: [
@@ -112,18 +115,19 @@ class _TopBar extends StatelessWidget {
             child: Text(
               section.name,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+              style: TextStyle(color: Chrome.strong, fontSize: 16, fontWeight: FontWeight.w600),
             ),
           ),
           if (spread) ...[
             const SizedBox(width: 8),
             _iconButton(Icons.chevron_left, 'Previous pages', left > 0 ? () => flip.flip(-1) : null),
-            Text('Pages ${left + 1}–${left + 2}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+            Text('Pages ${left + 1}–${left + 2}', style: TextStyle(color: Chrome.normal, fontSize: 13)),
             _iconButton(Icons.chevron_right, 'Next pages', () => flip.flip(1)),
           ],
           const Spacer(),
           const _SaveBadge(),
           const SizedBox(width: 4),
+          _iconButton(Icons.palette_outlined, 'Look and paper colour', () => showLookPicker(context)),
           const _DrawButton(),
           const SizedBox(width: 4),
           _ArchiveButton(count: store.archive.length),
@@ -135,8 +139,8 @@ class _TopBar extends StatelessWidget {
                 height: 32,
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white60,
-                    side: const BorderSide(color: Colors.white24),
+                    foregroundColor: Chrome.normal,
+                    side: BorderSide(color: Chrome.faint),
                     alignment: Alignment.centerLeft,
                   ),
                   onPressed: () => showNotebookSearch(context),
@@ -156,8 +160,8 @@ class _TopBar extends StatelessWidget {
 Widget _iconButton(IconData icon, String tip, VoidCallback? onTap) => IconButton(
       tooltip: tip,
       visualDensity: VisualDensity.compact,
-      color: Colors.white70,
-      disabledColor: Colors.white24,
+      color: Chrome.normal,
+      disabledColor: Chrome.faint,
       onPressed: onTap,
       icon: Icon(icon),
     );
@@ -174,8 +178,8 @@ class _DrawButton extends StatelessWidget {
       visualDensity: VisualDensity.compact,
       isSelected: ink.drawing,
       style: IconButton.styleFrom(
-        backgroundColor: ink.drawing ? Colors.white : null,
-        foregroundColor: ink.drawing ? const Color(0xFF1F3A73) : Colors.white70,
+        backgroundColor: ink.drawing ? (Paper.plain ? const Color(0xFFE3ECF8) : Colors.white) : null,
+        foregroundColor: ink.drawing ? const Color(0xFF1F3A73) : Chrome.normal,
       ),
       onPressed: () {
         FocusScope.of(context).unfocus();
@@ -195,7 +199,7 @@ class _ArchiveButton extends StatelessWidget {
     return IconButton(
       tooltip: 'Torn-out pages',
       visualDensity: VisualDensity.compact,
-      color: Colors.white70,
+      color: Chrome.normal,
       onPressed: () => showArchive(context),
       icon: Badge(
         isLabelVisible: count > 0,
@@ -226,10 +230,10 @@ class _SaveBadge extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 16, color: state == SaveState.failed ? Colors.redAccent : Colors.white54),
-              if (MediaQuery.sizeOf(context).width > 700) ...[
+              Icon(icon, size: 16, color: state == SaveState.failed ? Colors.redAccent : Chrome.quiet),
+              if (MediaQuery.sizeOf(context).width > 1000) ...[
                 const SizedBox(width: 6),
-                Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                Text(label, style: TextStyle(color: Chrome.quiet, fontSize: 12)),
               ],
             ],
           ),
@@ -269,6 +273,23 @@ class _Book extends StatelessWidget {
       );
     }
 
+    final pages = FlippingBook(spread: spread, controller: flip, buildPage: buildPage);
+
+    // Plain paper: the pages fill the screen, with the sections along the top.
+    if (Paper.plain) {
+      return Column(
+        children: [
+          const SectionChips(),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(4, 2, 4, 4),
+              child: FittedBox(alignment: Alignment.topCenter, child: pages),
+            ),
+          ),
+        ],
+      );
+    }
+
     final book = Container(
       padding: const EdgeInsets.all(_coverMargin),
       decoration: BoxDecoration(
@@ -284,7 +305,7 @@ class _Book extends StatelessWidget {
         decoration: const BoxDecoration(
           boxShadow: [BoxShadow(color: Color(0x55000000), blurRadius: 3, offset: Offset(1, 2))],
         ),
-        child: FlippingBook(spread: spread, controller: flip, buildPage: buildPage),
+        child: pages,
       ),
     );
 
@@ -323,19 +344,19 @@ class _PageBar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           TextButton.icon(
-            style: TextButton.styleFrom(foregroundColor: Colors.white70, disabledForegroundColor: Colors.white24),
+            style: TextButton.styleFrom(foregroundColor: Chrome.normal, disabledForegroundColor: Chrome.faint),
             onPressed: first ? null : () => flip.flip(-1),
             icon: const Icon(Icons.chevron_left),
             label: const Text('Back'),
           ),
           Text(
             '${store.pageIndex + 1} / ${store.section.pages.length}',
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
+            style: TextStyle(color: Chrome.normal, fontSize: 13),
           ),
           Directionality(
             textDirection: TextDirection.rtl,
             child: TextButton.icon(
-              style: TextButton.styleFrom(foregroundColor: Colors.white70),
+              style: TextButton.styleFrom(foregroundColor: Chrome.normal),
               onPressed: () => flip.flip(1),
               icon: Icon(last ? Icons.note_add_outlined : Icons.chevron_left),
               label: Text(last ? 'New page' : 'Next'),

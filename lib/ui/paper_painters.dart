@@ -8,9 +8,15 @@ import 'theme.dart';
 /// Draws a sheet of notebook paper: cream stock, ruled or grid lines,
 /// a red margin and a soft darkening toward the edges.
 class PaperPainter extends CustomPainter {
-  PaperPainter({required this.style, required this.bindingOnLeft, this.headerHeight = 72});
+  PaperPainter({required this.style, required this.bindingOnLeft, this.headerHeight = 72})
+      : sheet = Paper.sheet,
+        aged = !Paper.plain;
 
   final PaperStyle style;
+  final Color sheet;
+
+  /// Old paper look, with darker edges and a shadow by the coil.
+  final bool aged;
 
   /// Which side the spiral is on, so the margin and shading sit next to it.
   final bool bindingOnLeft;
@@ -22,7 +28,7 @@ class PaperPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
-    canvas.drawRect(rect, Paint()..color = Paper.sheet);
+    canvas.drawRect(rect, Paint()..color = sheet);
 
     switch (style) {
       case PaperStyle.ruled:
@@ -54,6 +60,8 @@ class PaperPainter extends CustomPainter {
         break;
     }
 
+    if (!aged) return;
+
     // Age the paper a little toward its outer edges.
     final vignette = RadialGradient(
       center: Alignment(bindingOnLeft ? -0.3 : 0.3, -0.2),
@@ -77,7 +85,11 @@ class PaperPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(PaperPainter old) =>
-      old.style != style || old.bindingOnLeft != bindingOnLeft || old.headerHeight != headerHeight;
+      old.style != style ||
+      old.bindingOnLeft != bindingOnLeft ||
+      old.headerHeight != headerHeight ||
+      old.sheet != sheet ||
+      old.aged != aged;
 }
 
 /// The metal coil binding, drawn either vertically between two pages

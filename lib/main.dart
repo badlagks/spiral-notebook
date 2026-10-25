@@ -51,11 +51,20 @@ class _NotebookAppState extends State<NotebookApp> with WidgetsBindingObserver {
       store: widget.store,
       child: InkScope(
         controller: _ink,
-        child: MaterialApp(
-          title: 'Spiral Notebook',
-          debugShowCheckedModeBanner: false,
-          theme: buildTheme(),
-          home: const NotebookScreen(),
+        child: ValueListenableBuilder(
+          valueListenable: widget.store.appearance,
+          builder: (context, appearance, _) {
+            final (look, tone) = appearance;
+            Paper.look = look;
+            Paper.tone = tone;
+            return MaterialApp(
+              title: 'Spiral Notebook',
+              debugShowCheckedModeBanner: false,
+              theme: buildTheme(),
+              // A new look redraws everything, paper included.
+              home: NotebookScreen(key: ValueKey(appearance)),
+            );
+          },
         ),
       ),
     );

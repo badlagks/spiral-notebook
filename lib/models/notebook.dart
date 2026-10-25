@@ -585,11 +585,24 @@ class ArchivedPage {
       );
 }
 
+/// How the app looks: a spiral notebook on a desk, or plain paper filling the screen.
+enum Look { notebook, plain }
+
+/// The colour of the paper.
+enum PaperTone { cream, white }
+
 class Notebook {
-  Notebook({required this.title, required this.sections, List<ArchivedPage>? archive})
-      : archive = archive ?? [];
+  Notebook({
+    required this.title,
+    required this.sections,
+    List<ArchivedPage>? archive,
+    this.look = Look.notebook,
+    this.tone = PaperTone.cream,
+  }) : archive = archive ?? [];
 
   String title;
+  Look look;
+  PaperTone tone;
   final List<Section> sections;
 
   /// Torn-out pages, newest first.
@@ -605,12 +618,16 @@ class Notebook {
   Map<String, dynamic> toJson() => {
         'version': 2,
         'title': title,
+        'look': look.name,
+        'tone': tone.name,
         'sections': sections.map((s) => s.toJson()).toList(),
         'archive': archive.map((a) => a.toJson()).toList(),
       };
 
   factory Notebook.fromJson(Map<String, dynamic> j) => Notebook(
         title: j['title'] as String? ?? 'My Notebook',
+        look: Look.values.asNameMap()[j['look']] ?? Look.notebook,
+        tone: PaperTone.values.asNameMap()[j['tone']] ?? PaperTone.cream,
         sections: (j['sections'] as List)
             .map((s) => Section.fromJson(s as Map<String, dynamic>))
             .toList(),

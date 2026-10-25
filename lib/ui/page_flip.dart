@@ -246,12 +246,21 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
     );
   }
 
-  Widget _spine() => const Positioned(
+  Widget _spine() => Positioned(
         left: pageWidth,
         top: 0,
         width: spineWidth,
         height: pageHeight,
-        child: ColoredBox(color: Color(0xFFE9DFC8), child: CustomPaint(painter: SpiralPainter())),
+        child: Paper.plain
+            // Plain paper just has a soft fold down the middle.
+            ? DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Paper.sheet, Color.lerp(Paper.sheet, Colors.black, 0.07)!, Paper.sheet],
+                  ),
+                ),
+              )
+            : const ColoredBox(color: Color(0xFFE9DFC8), child: CustomPaint(painter: SpiralPainter())),
       );
 
   // ----- One page, coil on the left -----
@@ -285,14 +294,15 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
         children: [
           // The page rolls away over the coil and out of sight.
           Positioned.fill(key: const ValueKey('pages'), child: ClipRect(child: Stack(children: layers))),
-          const Positioned(
-            key: ValueKey('spine'),
-            left: -8,
-            top: 0,
-            bottom: 0,
-            width: 30,
-            child: IgnorePointer(child: CustomPaint(painter: SpiralPainter())),
-          ),
+          if (!Paper.plain)
+            const Positioned(
+              key: ValueKey('spine'),
+              left: -8,
+              top: 0,
+              bottom: 0,
+              width: 30,
+              child: IgnorePointer(child: CustomPaint(painter: SpiralPainter())),
+            ),
           Positioned(
             key: const ValueKey('grab-back'),
             left: 22,
@@ -555,7 +565,7 @@ class _CornerPainter extends CustomPainter {
         ..lineTo(w, h)
         ..lineTo(w - 22, h)
         ..close(),
-      Paint()..color = Paper.desk.withValues(alpha: 0.85),
+      Paint()..color = Paper.plain ? Color.lerp(Paper.sheet, Colors.black, 0.12)! : Paper.desk.withValues(alpha: 0.85),
     );
     canvas.drawShadow(fold, Colors.black, 2, false);
     canvas.drawPath(fold, Paint()..color = const Color(0xFFEFE6D2));
