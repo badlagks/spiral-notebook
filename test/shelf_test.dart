@@ -8,6 +8,7 @@ import 'package:spiral_notebook/data/docs/doc_store.dart';
 import 'package:spiral_notebook/data/media/media_store.dart';
 import 'package:spiral_notebook/data/notebook_store.dart';
 import 'package:spiral_notebook/data/phone_calendar.dart';
+import 'package:spiral_notebook/data/pro.dart';
 import 'package:spiral_notebook/data/sample_notebook.dart';
 import 'package:spiral_notebook/main.dart';
 import 'package:spiral_notebook/models/notebook.dart';
@@ -19,6 +20,7 @@ void main() {
     alarms = QuietAlarms();
     mediaStore = MemoryMediaStore();
     phoneCalendar = FakePhoneCalendar();
+    purchases = FakePurchases(pro: true);
   });
 
   test('the notebook from before the shelf is moved over and kept', () async {
@@ -158,6 +160,48 @@ void main() {
     await tester.pumpAndSettle();
     expect(store.notebook.title, 'My Notebook');
     expect(find.text('Draft Outline'), findsOneWidget);
+    await tester.runAsync(store.saveNow);
+  });
+
+  testWidgets('one notebook is free; a second one asks for Pro', (tester) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final shop = FakePurchases();
+    purchases = shop;
+    final store = NotebookStore.memory(sampleNotebook(), docs: MemoryDocStore());
+    await tester.runAsync(store.saveNow);
+    await tester.pumpWidget(NotebookApp(store: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('All notebooks'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pro'), findsOneWidget);
+    await tester.tap(find.text('New notebook'));
+    await tester.pumpAndSettle();
+    expect(find.text('Spiral Notebook Pro'), findsOneWidget);
+    expect(find.textContaining('More notebooks come with Pro'), findsOneWidget);
+
+    // Not now: nothing is made.
+    await tester.tap(find.text('Not now'));
+    await tester.pumpAndSettle();
+    expect(find.text('Create'), findsNothing);
+    expect(store.shelf.notebooks, hasLength(1));
+
+    // Unlocking goes straight on to the new notebook.
+    await tester.tap(find.text('New notebook'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Unlock for €4.99'));
+    await tester.pumpAndSettle();
+    expect(shop.bought, 1);
+    expect(find.text('Pro is unlocked'), findsOneWidget);
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.text('Create'), findsOneWidget);
+    await tester.tap(find.text('Create'));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pumpAndSettle();
+    expect(store.shelf.notebooks, hasLength(2));
     await tester.runAsync(store.saveNow);
   });
 }

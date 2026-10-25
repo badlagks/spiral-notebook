@@ -14,6 +14,7 @@ import 'page_overview.dart';
 import 'template_picker.dart';
 import 'page_flip.dart';
 import 'paper_page.dart';
+import 'pro_sheet.dart';
 import 'reminders_ui.dart';
 import 'search_dialog.dart';
 import 'section_lock.dart';
@@ -221,6 +222,7 @@ class _MoreMenu extends StatelessWidget {
       onSelected: (v) => switch (v) {
         'redo' => StoreScope.read(context).redo(),
         'look' => showLookPicker(context),
+        'pro' => showProSheet(context),
         'backup' => backUpNotebook(context),
         'versions' => showEarlierVersions(context),
         'restore' => restoreNotebook(context),
@@ -256,6 +258,11 @@ class _MoreMenu extends StatelessWidget {
         const PopupMenuItem(
           value: 'pdf',
           child: ListTile(leading: Icon(Icons.picture_as_pdf_outlined), title: Text('Import a PDF to write on')),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'pro',
+          child: ListTile(leading: Icon(Icons.auto_stories_outlined), title: Text('Spiral Notebook Pro')),
         ),
       ],
     );

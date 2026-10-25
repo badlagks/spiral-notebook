@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:spiral_notebook/data/alarms/alarms.dart';
 import 'package:spiral_notebook/data/notebook_store.dart';
 import 'package:spiral_notebook/data/phone_calendar.dart';
+import 'package:spiral_notebook/data/pro.dart';
 import 'package:spiral_notebook/data/sample_notebook.dart';
 import 'package:spiral_notebook/main.dart';
 import 'package:spiral_notebook/models/notebook.dart';
@@ -25,6 +26,7 @@ Future<NotebookStore> pumpApp(WidgetTester tester, Size size) async {
   deviceUnlock = _FakeDeviceUnlock(hasSensor: false);
   alarms = QuietAlarms();
   phoneCalendar = FakePhoneCalendar();
+  purchases = FakePurchases(pro: true);
   final store = NotebookStore.memory(sampleNotebook());
   await tester.pumpWidget(NotebookApp(store: store));
   await tester.pumpAndSettle();

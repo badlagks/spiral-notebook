@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../data/pro.dart';
 import '../models/library.dart';
 import '../models/notebook.dart';
+import 'pro_sheet.dart';
 import 'store_scope.dart';
 import 'theme.dart';
 
@@ -101,7 +103,16 @@ class _Shelf extends StatelessWidget {
                         style: const TextStyle(color: Colors.white54),
                       ),
                       trailing: TextButton(
-                        onPressed: () => store.restoreNotebook(e.id),
+                        onPressed: () async {
+                          if (shelf.notebooks.isNotEmpty &&
+                              !await requirePro(
+                                context,
+                                reason: 'Your first notebook is free. Keeping more than one comes with Pro.',
+                              )) {
+                            return;
+                          }
+                          await store.restoreNotebook(e.id);
+                        },
                         child: const Text('Restore'),
                       ),
                     ),
@@ -123,6 +134,11 @@ class _Shelf extends StatelessWidget {
 
   Future<void> _newNotebook(BuildContext context) async {
     final store = StoreScope.read(context);
+    if (store.shelf.notebooks.isNotEmpty &&
+        !await requirePro(context, reason: 'Your first notebook is free. More notebooks come with Pro.')) {
+      return;
+    }
+    if (!context.mounted) return;
     final picked = await showNotebookEditor(
       context,
       heading: 'New notebook',
@@ -315,6 +331,7 @@ class _NewTile extends StatelessWidget {
                     Icon(Icons.add, color: Colors.white70, size: 36),
                     SizedBox(height: 6),
                     Text('New notebook', style: TextStyle(color: Colors.white70)),
+                    _ProTag(),
                   ],
                 ),
               ),
@@ -340,7 +357,7 @@ Future<({String title, int cover})?> showNotebookEditor(
   var chosen = cover;
   return showDialog<({String title, int cover})>(
     context: context,
-    builder: (c) => StatefulBuilder(
+    builder: (c0) => StatefulBuilder(
       builder: (c, setDialog) {
         void done() {
           final t = name.text.trim();
@@ -375,7 +392,10 @@ Future<({String title, int cover})?> showNotebookEditor(
                         selected: c == chosen,
                         label: 'Cover colour',
                         child: GestureDetector(
-                          onTap: () => setDialog(() => chosen = c),
+                          onTap: () async {
+                            if (c != chosen && !await requirePro(c0, reason: 'Cover colours come with Pro.')) return;
+                            setDialog(() => chosen = c);
+                          },
                           child: Container(
                             width: 36,
                             height: 36,
@@ -387,7 +407,11 @@ Future<({String title, int cover})?> showNotebookEditor(
                                 width: 3,
                               ),
                             ),
-                            child: c == chosen ? const Icon(Icons.check, color: Colors.white, size: 18) : null,
+                            child: c == chosen
+                                ? const Icon(Icons.check, color: Colors.white, size: 18)
+                                : purchases.isPro.value
+                                ? null
+                                : const Icon(Icons.lock_outline, color: Colors.white70, size: 16),
                           ),
                         ),
                       ),
@@ -404,4 +428,21 @@ Future<({String title, int cover})?> showNotebookEditor(
       },
     ),
   );
+}
+
+/// Shown on the New notebook card while only one notebook is free.
+class _ProTag extends StatelessWidget {
+  const _ProTag();
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.read(context);
+    if (purchases.isPro.value || store.shelf.notebooks.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(color: const Color(0xFFE6B450), borderRadius: BorderRadius.circular(10)),
+      child: const Text('Pro', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF3A2A10))),
+    );
+  }
 }

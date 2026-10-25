@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'data/notebook_store.dart';
+import 'data/pro.dart';
 import 'ui/ink.dart';
 import 'ui/notebook_screen.dart';
 import 'ui/section_lock.dart';
@@ -9,6 +10,7 @@ import 'ui/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await purchases.init();
   final store = await NotebookStore.load();
   runApp(NotebookApp(store: store));
 }
