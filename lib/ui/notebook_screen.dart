@@ -355,10 +355,12 @@ class _Book extends StatelessWidget {
 
     // A locked section shows one closed sheet until its PIN is typed.
     final Widget pages = store.isLocked(section)
-        ? SizedBox(
-            width: spread ? pageWidth * 2 + spineWidth : pageWidth,
-            height: pageHeight,
-            child: LockedSheet(section: section),
+        ? Builder(
+            builder: (_) => SizedBox(
+              width: spread ? pageWidth * 2 + spineWidth : pageWidth,
+              height: pageHeight,
+              child: LockedSheet(section: section),
+            ),
           )
         : FlippingBook(spread: spread, controller: flip, buildPage: buildPage);
 
@@ -370,7 +372,12 @@ class _Book extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(4, 2, 4, 4),
-              child: FittedBox(alignment: Alignment.topCenter, child: pages),
+              child: LayoutBuilder(
+                builder: (context, c) {
+                  fitPaper(c.biggest, spread: spread, gutter: spineWidth, content: contentExtent(store.notebook));
+                  return FittedBox(alignment: Alignment.topCenter, child: pages);
+                },
+              ),
             ),
           ),
         ],
@@ -412,6 +419,14 @@ class _Book extends StatelessWidget {
               rightGap = -shift;
             }
           }
+          // The paper takes the shape of the room it has.
+          fitPaper(
+            Size(box.maxWidth - tabsWidth - leftGap - rightGap, box.maxHeight),
+            spread: spread,
+            gutter: spineWidth,
+            frame: _coverMargin * 2,
+            content: contentExtent(store.notebook),
+          );
           return Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

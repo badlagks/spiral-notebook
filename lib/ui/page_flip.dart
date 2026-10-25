@@ -104,8 +104,8 @@ class _FlippingBookState extends State<FlippingBook> with SingleTickerProviderSt
 
   /// Where the turning sheet lies when flat.
   Rect get _sheet => widget.spread
-      ? const Rect.fromLTWH(pageWidth + spineWidth, 0, pageWidth, pageHeight)
-      : const Rect.fromLTWH(0, 0, pageWidth, pageHeight);
+      ? Rect.fromLTWH(pageWidth + spineWidth, 0, pageWidth, pageHeight)
+      : Rect.fromLTWH(0, 0, pageWidth, pageHeight);
 
   /// How far over the sheet is, from 0 (flat) to 1 (turned).
   double get _progress => ((_rest.dx - _corner.dx) / (2 * _reach)).clamp(0.0, 1.0);

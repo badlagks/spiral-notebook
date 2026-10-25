@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui' show Size;
 
 final _rand = Random();
 
@@ -6,10 +7,54 @@ final _rand = Random();
 String newId() =>
     '${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}${_rand.nextInt(1 << 20).toRadixString(36)}';
 
-/// Every page is laid out on the same sheet size, in paper units, and scaled
-/// to fit the screen. Widgets keep their place on any device. (A5 proportions.)
-const pageWidth = 480.0;
-const pageHeight = 680.0;
+/// Pages are laid out in paper units and scaled to fit the screen, so
+/// widgets keep their place on any device. The smallest sheet is A5-shaped.
+const basePageWidth = 480.0;
+const basePageHeight = 680.0;
+
+/// The sheet's size right now. It starts at the A5 size and grows to the
+/// screen's shape, so the notebook fills a tall phone or a wide laptop, and
+/// it always grows to hold everything already on the pages.
+double pageWidth = basePageWidth;
+double pageHeight = basePageHeight;
+
+/// How far right and down anything reaches on any page of [nb].
+Size contentExtent(Notebook nb) {
+  var right = 0.0, bottom = 0.0;
+  for (final page in nb.sections.expand((s) => s.pages)) {
+    for (final b in page.blocks) {
+      if (!b.isPlaced) continue;
+      right = max(right, b.x! + b.width + 16);
+      bottom = max(bottom, b.y! + b.estimatedHeight + 40);
+    }
+    for (final stroke in page.strokes) {
+      for (final p in stroke.points) {
+        right = max(right, p.x + 16);
+        bottom = max(bottom, p.y + 40);
+      }
+    }
+  }
+  return Size(right, bottom);
+}
+
+/// Sets [pageWidth] and [pageHeight] for a book shown in [area] (in screen
+/// pixels): one page or two side by side with a [gutter] between, inside a
+/// [frame] of cover all round. Only the side with room to spare grows, so
+/// writing stays the same size on screen.
+void fitPaper(Size area, {required bool spread, double gutter = 0, double frame = 0, Size content = Size.zero}) {
+  if (area.width <= 0 || area.height <= 0) return;
+  final pages = spread ? 2 : 1;
+  final gap = spread ? gutter : 0.0;
+  var w = basePageWidth, h = basePageHeight;
+  final room = area.width / area.height;
+  if (room > (pages * w + gap + frame) / (h + frame)) {
+    w = (room * (h + frame) - frame - gap) / pages;
+  } else {
+    h = (pages * w + gap + frame) / room - frame;
+  }
+  pageWidth = max(w.clamp(basePageWidth, basePageWidth * 1.6), content.width);
+  pageHeight = max(h.clamp(basePageHeight, basePageHeight * 1.8), content.height);
+}
 
 /// Paper styles a page can be printed on.
 enum PaperStyle { ruled, grid, blank }

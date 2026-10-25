@@ -51,6 +51,9 @@ class _PaperPageState extends State<PaperPage> {
   String? _selected;
   String? _justAdded;
 
+  /// Each widget's visible area, to tell which one a tap meant.
+  final _contentKeys = <String, GlobalKey>{};
+
   /// True while the page is being saved as a PDF: buttons are hidden.
   bool _exporting = false;
 
@@ -87,6 +90,45 @@ class _PaperPageState extends State<PaperPage> {
     if (_selected == block.id) return;
     setState(() => _selected = block.id);
     StoreScope.read(context).bringToFront(_page, block);
+  }
+
+  bool _under(Block b, Offset global) {
+    final box = _contentKeys[b.id]?.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return false;
+    return (Offset.zero & box.size).contains(box.globalToLocal(global));
+  }
+
+  /// A press on a widget where several overlap. Writing and checklists are
+  /// mostly clear paper, so they shouldn't steal a press from a sticky note,
+  /// photo, sheet or calculator you can see through them. The widget already
+  /// picked up stays picked up; otherwise the top solid widget under the
+  /// finger wins, then the top one of any kind.
+  void _pressed(Block hit, Offset global) {
+    final under = [
+      for (final b in _page.blocks.reversed)
+        if (_under(b, global)) b,
+    ];
+    if (under.isEmpty) return _select(hit);
+    if (under.any((b) => b.id == _selected)) return;
+    bool solid(Block b) => b is StickyBlock || b is SheetBlock || b is CalculatorBlock || b is MediaBlock;
+    _select(under.firstWhere(solid, orElse: () => under.first));
+  }
+
+  /// Moves a widget to the page before or after this one.
+  void _moveToNeighbour(Block block, int delta) {
+    final store = StoreScope.read(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final to = store.moveBlockToNeighbour(_page, block, delta);
+    if (to == null) return;
+    setState(() => _selected = null);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('Moved to page ${to.pageIndex + 1}'),
+          action: SnackBarAction(label: 'Show', onPressed: () => store.openPage(to.sectionIndex, to.pageIndex)),
+        ),
+      );
   }
 
   /// Saves this page, as it looks, to a PDF file.
@@ -153,7 +195,10 @@ class _PaperPageState extends State<PaperPage> {
                 page: _page,
                 selected: block.id == _selected,
                 toPaper: _toPaper,
+                contentKey: _contentKeys.putIfAbsent(block.id, GlobalKey.new),
                 onSelect: () => _select(block),
+                onPress: (global) => _pressed(block, global),
+                onMoveToPage: (delta) => _moveToNeighbour(block, delta),
                 onRemoved: () => setState(() => _selected = null),
                 child: blockContent(block, autofocus: block.id == _justAdded),
               ),
@@ -308,7 +353,10 @@ class _PlacedBlock extends StatefulWidget {
     required this.page,
     required this.selected,
     required this.toPaper,
+    required this.contentKey,
     required this.onSelect,
+    required this.onPress,
+    required this.onMoveToPage,
     required this.onRemoved,
     required this.child,
   });
@@ -317,7 +365,12 @@ class _PlacedBlock extends StatefulWidget {
   final NotePage page;
   final bool selected;
   final Offset Function(Offset global) toPaper;
+  final GlobalKey contentKey;
   final VoidCallback onSelect;
+  final ValueChanged<Offset> onPress;
+
+  /// Moves the widget to the next page (+1) or the one before (-1).
+  final ValueChanged<int> onMoveToPage;
   final VoidCallback onRemoved;
   final Widget child;
 
@@ -335,8 +388,11 @@ class _PlacedBlockState extends State<_PlacedBlock> {
 
   Block get _b => widget.block;
 
+  bool _moving = false;
+
   void _moveStart(DragStartDetails d) {
     widget.onSelect();
+    _moving = true;
     _grab = widget.toPaper(d.globalPosition);
     _origin = Offset(_b.x!, _b.y!);
   }
@@ -344,7 +400,8 @@ class _PlacedBlockState extends State<_PlacedBlock> {
   void _moveUpdate(DragUpdateDetails d) {
     final delta = widget.toPaper(d.globalPosition) - _grab!;
     setState(() {
-      _b.x = (_origin.dx + delta.dx).clamp(40 - _b.width, pageWidth - 40);
+      // It can go past the edge: let go there and it moves to the next page.
+      _b.x = (_origin.dx + delta.dx).clamp(10 - _b.width, pageWidth - 10);
       _b.y = (_origin.dy + delta.dy).clamp(0.0, pageHeight - 30);
     });
   }
@@ -361,6 +418,17 @@ class _PlacedBlockState extends State<_PlacedBlock> {
 
   void _dragEnd([DragEndDetails? _]) {
     _grab = null;
+    final moving = _moving;
+    _moving = false;
+    if (moving && _b.x! + _b.width / 2 > pageWidth) {
+      _b.x = 24;
+      return widget.onMoveToPage(1);
+    }
+    if (moving && _b.x! + _b.width / 2 < 0) {
+      _b.x = math.max(24.0, pageWidth - _b.width - 24);
+      return widget.onMoveToPage(-1);
+    }
+    _b.x = _b.x!.clamp(40 - _b.width, pageWidth - 40);
     StoreScope.read(context).changed();
   }
 
@@ -382,7 +450,11 @@ class _PlacedBlockState extends State<_PlacedBlock> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(_side, _handleRoom, _side, _side),
-                child: Listener(onPointerDown: (_) => widget.onSelect(), child: widget.child),
+                child: Listener(
+                  key: widget.contentKey,
+                  onPointerDown: (e) => widget.onPress(e.position),
+                  child: widget.child,
+                ),
               ),
               if (widget.selected)
                 Positioned.fill(
@@ -540,6 +612,9 @@ class _PlacedBlockState extends State<_PlacedBlock> {
       const PopupMenuItem(value: 'straighten', child: Text('Straighten')),
       const PopupMenuItem(value: 'tilt-right', child: Text('Tilt right')),
       const PopupMenuDivider(),
+      const PopupMenuItem(value: 'prev-page', child: Text('Move to previous page')),
+      const PopupMenuItem(value: 'next-page', child: Text('Move to next page')),
+      const PopupMenuDivider(),
       const PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
       const PopupMenuItem(value: 'erase', child: Text('Erase')),
     ];
@@ -552,6 +627,10 @@ class _PlacedBlockState extends State<_PlacedBlock> {
       case 'remind':
         showReminderEditor(context, b);
         return;
+      case 'prev-page':
+        return widget.onMoveToPage(-1);
+      case 'next-page':
+        return widget.onMoveToPage(1);
       case 'highlight':
         (b as TextBlock).highlight = !b.highlight;
       case 'heading':

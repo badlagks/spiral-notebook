@@ -571,6 +571,49 @@ void main() {
     expect(find.text('Project Budget'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a widget moves to the next page from its menu, or by dragging past the edge', (tester) async {
+    final store = await pumpApp(tester, const Size(1400, 900));
+    final first = store.sections.first.pages[0];
+    final second = store.sections.first.pages[1];
+    final sticky = first.blocks.whereType<StickyBlock>().first;
+    await tester.tap(find.text('Call Sam about the sketches'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Widget options').hitTestable().first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Move to next page'));
+    await tester.pumpAndSettle();
+    expect(first.blocks, isNot(contains(sticky)));
+    expect(second.blocks, contains(sticky));
+    expect(find.text('Moved to page 2'), findsOneWidget);
+
+    // Dragged off the left edge of page 2, it goes back to page 1.
+    await tester.tap(find.text('Call Sam about the sketches'));
+    await tester.pumpAndSettle();
+    final handle = find.descendant(
+      of: find.byWidgetPredicate((w) => w is AnimatedOpacity && w.opacity == 1),
+      matching: find.text('Move'),
+    );
+    await tester.drag(handle, const Offset(-700, 0));
+    await tester.pumpAndSettle();
+    expect(first.blocks, contains(sticky));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a tap picks the widget you can see, not a clear one on top of it', (tester) async {
+    final store = await pumpApp(tester, const Size(1400, 900));
+    final page = store.sections.first.pages[0];
+    final sticky = page.blocks.whereType<StickyBlock>().first;
+    // A wide, nearly empty text box laid over the sticky note, on top.
+    final text = TextBlock(text: 'x', x: sticky.x! - 100, y: sticky.y! - 10, width: 420);
+    store.addBlock(page, text);
+    await tester.pumpAndSettle();
+    expect(page.blocks.last, text);
+    final center = tester.getCenter(find.text('Call Sam about the sketches'));
+    await tester.tapAt(center);
+    await tester.pumpAndSettle();
+    expect(page.blocks.last, sticky);
+  });
 }
 
 Future<void> showCalendarFrom(WidgetTester tester) async {

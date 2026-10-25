@@ -299,6 +299,24 @@ class NotebookStore extends ChangeNotifier {
     changed();
   }
 
+  /// Moves [block] from [page] to the page before (-1) or after (+1) it,
+  /// adding a page at the end if needed. Null if there's no page before.
+  ({int sectionIndex, int pageIndex})? moveBlockToNeighbour(NotePage page, Block block, int delta) {
+    for (var s = 0; s < sections.length; s++) {
+      final pages = sections[s].pages;
+      final at = pages.indexOf(page);
+      if (at < 0) continue;
+      final to = at + delta;
+      if (to < 0) return null;
+      if (to >= pages.length) pages.add(NotePage(paper: page.paper));
+      page.blocks.remove(block);
+      pages[to].blocks.add(block);
+      changed();
+      return (sectionIndex: s, pageIndex: to);
+    }
+    return null;
+  }
+
   /// Moves a block above the others on its page.
   void bringToFront(NotePage page, Block block) {
     if (page.blocks.last == block) return;

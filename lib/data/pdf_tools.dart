@@ -12,7 +12,7 @@ Future<Uint8List> picturesToPdf(List<Uint8List> pngs) async {
   for (final png in pngs) {
     doc.addPage(
       pw.Page(
-        pageFormat: const PdfPageFormat(pageWidth, pageHeight),
+        pageFormat: PdfPageFormat(pageWidth, pageHeight),
         margin: pw.EdgeInsets.zero,
         build: (_) => pw.Image(pw.MemoryImage(png), fit: pw.BoxFit.fill),
       ),
