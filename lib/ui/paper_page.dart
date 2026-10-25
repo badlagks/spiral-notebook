@@ -14,6 +14,7 @@ import 'blocks/sticky_view.dart';
 import 'ink.dart';
 import 'paper_painters.dart';
 import 'store_scope.dart';
+import 'template_picker.dart';
 import 'theme.dart';
 import 'widget_gallery.dart';
 
@@ -254,6 +255,13 @@ class _PaperPageState extends State<PaperPage> {
           case 'ruled' || 'grid' || 'blank':
             _page.paper = PaperStyle.values.byName(value);
             store.changed();
+          case 'template':
+            showTemplatePicker(context).then((t) {
+              if (t != null) store.useTemplate(t);
+            });
+          case 'star':
+            _page.starred = !_page.starred;
+            store.changed();
           case 'pdf':
             _saveAsPdf();
           case 'tear':
@@ -275,6 +283,8 @@ class _PaperPageState extends State<PaperPage> {
             ),
           const PopupMenuDivider(),
         ],
+        const PopupMenuItem(value: 'template', child: Text('Use a template…')),
+        PopupMenuItem(value: 'star', child: Text(_page.starred ? 'Remove from favourites' : 'Add to favourites')),
         const PopupMenuItem(value: 'pdf', child: Text('Save page as PDF')),
         const PopupMenuItem(value: 'tear', child: Text('Tear out this page')),
       ],

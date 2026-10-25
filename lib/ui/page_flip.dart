@@ -577,10 +577,11 @@ class _CornerPainter extends CustomPainter {
 
 /// The back side of the last page: an empty sheet waiting to be written on.
 class BlankSheet extends StatelessWidget {
-  const BlankSheet({super.key, required this.bindingOnLeft, required this.onStart});
+  const BlankSheet({super.key, required this.bindingOnLeft, required this.onStart, this.onTemplate});
 
   final bool bindingOnLeft;
   final VoidCallback? onStart;
+  final VoidCallback? onTemplate;
 
   @override
   Widget build(BuildContext context) {
@@ -589,10 +590,21 @@ class BlankSheet extends StatelessWidget {
       child: Center(
         child: onStart == null
             ? null
-            : TextButton.icon(
-                onPressed: onStart,
-                icon: const Icon(Icons.edit_outlined, color: Pen.pencil),
-                label: Text('Start a new page', style: handwriting.copyWith(color: Pen.pencil)),
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton.icon(
+                    onPressed: onStart,
+                    icon: const Icon(Icons.edit_outlined, color: Pen.pencil),
+                    label: Text('Start a new page', style: handwriting.copyWith(color: Pen.pencil)),
+                  ),
+                  if (onTemplate != null)
+                    TextButton.icon(
+                      onPressed: onTemplate,
+                      icon: const Icon(Icons.dashboard_customize_outlined, color: Pen.pencil),
+                      label: Text('or use a template', style: handwriting.copyWith(color: Pen.pencil, fontSize: 17)),
+                    ),
+                ],
               ),
       ),
     );

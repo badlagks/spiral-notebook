@@ -253,4 +253,41 @@ void main() {
     expect(again.tone, PaperTone.white);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('the page overview opens pages and keeps favourites', (tester) async {
+    final store = await pumpApp(tester, const Size(390, 844));
+    await tester.tap(find.byTooltip('All pages'));
+    await tester.pumpAndSettle();
+    expect(find.text('Project Budget'), findsWidgets);
+    await tester.tap(find.byTooltip('Add to favourites').last);
+    await tester.pumpAndSettle();
+    expect(store.section.pages[1].starred, isTrue);
+
+    await tester.tap(find.text('Favourites'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ideas · page 2'), findsOneWidget);
+    await tester.tap(find.text('Ideas · page 2'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(PaperPage).last);
+    await tester.pumpAndSettle();
+    expect(store.pageIndex, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a template fills an empty page, or a new one', (tester) async {
+    final store = await pumpApp(tester, const Size(390, 844));
+    await tester.tap(find.byTooltip('Page options'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Use a template…'));
+    await tester.pumpAndSettle();
+    expect(find.text('Habit tracker'), findsOneWidget);
+    await tester.tap(find.text('Meeting notes'));
+    await tester.pumpAndSettle();
+    // The first page already has notes, so the meeting page comes after it.
+    expect(store.pageIndex, 1);
+    expect(store.page.title, 'Meeting');
+    expect(store.page.blocks.whereType<ChecklistBlock>(), hasLength(1));
+    expect(store.section.pages[0].title, 'Draft Outline');
+    expect(tester.takeException(), isNull);
+  });
 }

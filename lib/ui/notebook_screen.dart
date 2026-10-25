@@ -6,6 +6,8 @@ import 'archive_dialog.dart';
 import 'ink.dart';
 import 'look_picker.dart';
 import 'notebook_actions.dart';
+import 'page_overview.dart';
+import 'template_picker.dart';
 import 'page_flip.dart';
 import 'paper_page.dart';
 import 'search_dialog.dart';
@@ -127,6 +129,7 @@ class _TopBar extends StatelessWidget {
           const Spacer(),
           const _SaveBadge(),
           const SizedBox(width: 4),
+          _iconButton(Icons.grid_view_outlined, 'All pages', () => showPageOverview(context)),
           const _MoreMenu(),
           const _DrawButton(),
           const SizedBox(width: 4),
@@ -292,7 +295,19 @@ class _Book extends StatelessWidget {
     Widget buildPage(int index, {required bool bindingOnLeft, required bool interactive}) {
       if (index < 0) return const SizedBox.shrink();
       if (index >= section.pages.length) {
-        return BlankSheet(bindingOnLeft: bindingOnLeft, onStart: interactive ? () => store.ensurePage(index) : null);
+        return BlankSheet(
+          bindingOnLeft: bindingOnLeft,
+          onStart: interactive ? () => store.ensurePage(index) : null,
+          onTemplate: interactive
+              ? () async {
+                  final template = await showTemplatePicker(context);
+                  if (template == null) return;
+                  store.ensurePage(index);
+                  store.openPage(store.sectionIndex, index);
+                  store.useTemplate(template);
+                }
+              : null,
+        );
       }
       final page = section.pages[index];
       return PaperPage(
@@ -381,9 +396,11 @@ class _PageBar extends StatelessWidget {
             icon: const Icon(Icons.chevron_left),
             label: const Text('Back'),
           ),
-          Text(
-            '${store.pageIndex + 1} / ${store.section.pages.length}',
-            style: TextStyle(color: Chrome.normal, fontSize: 13),
+          // Tapping the page count shows all the pages.
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Chrome.normal),
+            onPressed: () => showPageOverview(context),
+            child: Text('${store.pageIndex + 1} / ${store.section.pages.length}', style: const TextStyle(fontSize: 13)),
           ),
           Directionality(
             textDirection: TextDirection.rtl,

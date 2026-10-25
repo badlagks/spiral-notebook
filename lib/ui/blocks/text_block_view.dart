@@ -47,7 +47,10 @@ class _TextBlockViewState extends State<TextBlockView> {
             ? 'Heading'
             : block.highlight
                 ? 'Highlight'
-                : 'Write here… start a line with "- " for an outline',
+                // Narrow boxes (like in templates) get the short hint.
+                : block.width < 340
+                    ? 'Write here…'
+                    : 'Write here… start a line with "- " for an outline',
         hintStyle: style.copyWith(color: Pen.pencil.withValues(alpha: 0.45)),
       ),
       onChanged: (text) {

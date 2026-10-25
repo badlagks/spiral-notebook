@@ -221,6 +221,22 @@ class NotebookStore extends ChangeNotifier {
     changed();
   }
 
+  /// Lays a template onto the open page if it's still empty, otherwise onto
+  /// a new page right after it, and opens that page.
+  void useTemplate(NotePage template) {
+    final current = page;
+    if (current.blocks.isEmpty && current.strokes.isEmpty && current.title.isEmpty && current.background == null) {
+      current
+        ..title = template.title
+        ..paper = template.paper
+        ..blocks.addAll(template.blocks);
+    } else {
+      _pageIndex++;
+      section.pages.insert(_pageIndex, template);
+    }
+    changed();
+  }
+
   /// Puts a new block on [page] in a free spot and saves.
   void addBlock(NotePage page, Block block) {
     if (!block.isPlaced) page.placeNew(block);
