@@ -1,0 +1,32 @@
+name: spiral_notebook
+description: "A skeuomorphic spiral notebook for notes, outlines, checklists, spreadsheets and quick math."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: ^2.5.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  fonts:
+    - family: Kalam
+      fonts:
+        - asset: assets/fonts/Kalam-Regular.ttf
+        - asset: assets/fonts/Kalam-Bold.ttf
+          weight: 700
+    - family: Caveat
+      fonts:
+        - asset: assets/fonts/Caveat-Variable.ttf
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Variable.ttf
