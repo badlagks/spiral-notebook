@@ -5,6 +5,7 @@ import '../data/notebook_store.dart';
 import 'archive_dialog.dart';
 import 'ink.dart';
 import 'look_picker.dart';
+import 'notebook_actions.dart';
 import 'page_flip.dart';
 import 'paper_page.dart';
 import 'search_dialog.dart';
@@ -38,55 +39,54 @@ class _NotebookScreenState extends State<NotebookScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, constraints) {
-      final spread = showsSpread(constraints.biggest);
-      return CallbackShortcuts(
-        bindings: {
-          const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () => showNotebookSearch(context),
-          const SingleActivator(LogicalKeyboardKey.keyF, control: true): () => showNotebookSearch(context),
-          const SingleActivator(LogicalKeyboardKey.pageDown): () => _flip.flip(1),
-          const SingleActivator(LogicalKeyboardKey.pageUp): () => _flip.flip(-1),
-        },
-        child: Focus(
-          autofocus: true,
-          child: Scaffold(
-            body: DecoratedBox(
-              decoration: Paper.plain
-                  ? BoxDecoration(color: Paper.sheet)
-                  : const BoxDecoration(
-                      gradient: RadialGradient(
-                        center: Alignment(0, -0.3),
-                        radius: 1.2,
-                        colors: [Color(0xFF4A4540), Paper.desk],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final spread = showsSpread(constraints.biggest);
+        return CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () => showNotebookSearch(context),
+            const SingleActivator(LogicalKeyboardKey.keyF, control: true): () => showNotebookSearch(context),
+            const SingleActivator(LogicalKeyboardKey.pageDown): () => _flip.flip(1),
+            const SingleActivator(LogicalKeyboardKey.pageUp): () => _flip.flip(-1),
+          },
+          child: Focus(
+            autofocus: true,
+            child: Scaffold(
+              body: DecoratedBox(
+                decoration: Paper.plain
+                    ? BoxDecoration(color: Paper.sheet)
+                    : const BoxDecoration(
+                        gradient: RadialGradient(
+                          center: Alignment(0, -0.3),
+                          radius: 1.2,
+                          colors: [Color(0xFF4A4540), Paper.desk],
+                        ),
                       ),
-                    ),
-              child: SafeArea(
-                child: Column(
-                  children: [
-                    _TopBar(spread: spread, flip: _flip),
-                    Expanded(
-                      child: Stack(
-                        children: [
-                          Positioned.fill(child: _Book(spread: spread, flip: _flip)),
-                          if (InkScope.of(context).drawing)
-                            const Positioned(
-                              left: 8,
-                              right: 8,
-                              bottom: 8,
-                              child: Center(child: DrawToolbar()),
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      _TopBar(spread: spread, flip: _flip),
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: _Book(spread: spread, flip: _flip),
                             ),
-                        ],
+                            if (InkScope.of(context).drawing)
+                              const Positioned(left: 8, right: 8, bottom: 8, child: Center(child: DrawToolbar())),
+                          ],
+                        ),
                       ),
-                    ),
-                    if (!spread) _PageBar(flip: _flip),
-                  ],
+                      if (!spread) _PageBar(flip: _flip),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   }
 }
 
@@ -127,7 +127,7 @@ class _TopBar extends StatelessWidget {
           const Spacer(),
           const _SaveBadge(),
           const SizedBox(width: 4),
-          _iconButton(Icons.palette_outlined, 'Look and paper colour', () => showLookPicker(context)),
+          const _MoreMenu(),
           const _DrawButton(),
           const SizedBox(width: 4),
           _ArchiveButton(count: store.archive.length),
@@ -158,13 +158,52 @@ class _TopBar extends StatelessWidget {
 }
 
 Widget _iconButton(IconData icon, String tip, VoidCallback? onTap) => IconButton(
-      tooltip: tip,
-      visualDensity: VisualDensity.compact,
-      color: Chrome.normal,
-      disabledColor: Chrome.faint,
-      onPressed: onTap,
-      icon: Icon(icon),
+  tooltip: tip,
+  visualDensity: VisualDensity.compact,
+  color: Chrome.normal,
+  disabledColor: Chrome.faint,
+  onPressed: onTap,
+  icon: Icon(icon),
+);
+
+/// Settings and things done to the whole notebook.
+class _MoreMenu extends StatelessWidget {
+  const _MoreMenu();
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      tooltip: 'More',
+      icon: Icon(Icons.menu, color: Chrome.normal),
+      onSelected: (v) => switch (v) {
+        'look' => showLookPicker(context),
+        'backup' => backUpNotebook(context),
+        'restore' => restoreNotebook(context),
+        'pdf' => importPdf(context),
+        _ => null,
+      },
+      itemBuilder: (_) => const [
+        PopupMenuItem(
+          value: 'look',
+          child: ListTile(leading: Icon(Icons.palette_outlined), title: Text('Look and paper colour')),
+        ),
+        PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'backup',
+          child: ListTile(leading: Icon(Icons.save_alt), title: Text('Back up notebook')),
+        ),
+        PopupMenuItem(
+          value: 'restore',
+          child: ListTile(leading: Icon(Icons.restore), title: Text('Restore from a backup')),
+        ),
+        PopupMenuItem(
+          value: 'pdf',
+          child: ListTile(leading: Icon(Icons.picture_as_pdf_outlined), title: Text('Import a PDF to write on')),
+        ),
+      ],
     );
+  }
+}
 
 /// Switches between writing (tap widgets, type) and drawing on the paper.
 class _DrawButton extends StatelessWidget {
@@ -201,11 +240,7 @@ class _ArchiveButton extends StatelessWidget {
       visualDensity: VisualDensity.compact,
       color: Chrome.normal,
       onPressed: () => showArchive(context),
-      icon: Badge(
-        isLabelVisible: count > 0,
-        label: Text('$count'),
-        child: const Icon(Icons.inventory_2_outlined),
-      ),
+      icon: Badge(isLabelVisible: count > 0, label: Text('$count'), child: const Icon(Icons.inventory_2_outlined)),
     );
   }
 }
@@ -257,10 +292,7 @@ class _Book extends StatelessWidget {
     Widget buildPage(int index, {required bool bindingOnLeft, required bool interactive}) {
       if (index < 0) return const SizedBox.shrink();
       if (index >= section.pages.length) {
-        return BlankSheet(
-          bindingOnLeft: bindingOnLeft,
-          onStart: interactive ? () => store.ensurePage(index) : null,
-        );
+        return BlankSheet(bindingOnLeft: bindingOnLeft, onStart: interactive ? () => store.ensurePage(index) : null);
       }
       final page = section.pages[index];
       return PaperPage(

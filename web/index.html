@@ -31,6 +31,8 @@
 
   <title>spiral_notebook</title>
   <link rel="manifest" href="manifest.json">
+  <!-- PDF reading is bundled with the app so it works offline. -->
+  <script>window.dartPdfJsBaseUrl = new URL('pdfjs/', document.baseURI).href;</script>
 </head>
 <body>
   <!--

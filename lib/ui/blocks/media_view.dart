@@ -55,7 +55,7 @@ class _MediaViewState extends State<MediaView> {
             child: ClipRect(
               child: switch (b.kind) {
                 _ when b.isSample => _SamplePicture(video: b.kind == MediaKind.video),
-                MediaKind.photo => _Photo(mediaId: b.mediaId),
+                MediaKind.photo => StoredPicture(mediaId: b.mediaId),
                 MediaKind.video => _Video(block: b),
               },
             ),
@@ -119,9 +119,12 @@ class _MediaViewState extends State<MediaView> {
 /// Photos already read from storage, so turning pages doesn't reload them.
 final _photoCache = <String, Future<Uint8List?>>{};
 
-class _Photo extends StatelessWidget {
-  const _Photo({required this.mediaId});
+/// A photo kept on the device, shown once it has been read.
+class StoredPicture extends StatelessWidget {
+  const StoredPicture({super.key, required this.mediaId, this.fit = BoxFit.cover, this.alignment = Alignment.center});
   final String mediaId;
+  final BoxFit fit;
+  final Alignment alignment;
 
   @override
   Widget build(BuildContext context) {
@@ -134,8 +137,9 @@ class _Photo extends StatelessWidget {
         }
         return Image.memory(
           bytes,
-          fit: BoxFit.cover,
-          cacheWidth: 1200,
+          fit: fit,
+          alignment: alignment,
+          cacheWidth: 1600,
           gaplessPlayback: true,
           errorBuilder: (_, _, _) => const _Missing(loading: false, icon: Icons.broken_image_outlined),
         );

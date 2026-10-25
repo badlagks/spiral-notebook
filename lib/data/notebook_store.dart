@@ -190,6 +190,37 @@ class NotebookStore extends ChangeNotifier {
     if (notebook.archive.length != before) _scheduleSave();
   }
 
+  /// Swaps in a notebook restored from a backup, opening its first page.
+  void replaceWith(Notebook nb) {
+    notebook
+      ..title = nb.title
+      ..look = nb.look
+      ..tone = nb.tone;
+    notebook.sections
+      ..clear()
+      ..addAll(nb.sections);
+    notebook.archive
+      ..clear()
+      ..addAll(nb.archive);
+    _sectionIndex = 0;
+    _pageIndex = 0;
+    appearance.value = (notebook.look, notebook.tone);
+    changed();
+  }
+
+  /// Adds [pages] after the last page of the open section and opens the first.
+  void addPages(List<NotePage> pages) {
+    if (pages.isEmpty) return;
+    // A blank last page is replaced rather than left behind.
+    final last = section.pages.last;
+    if (last.blocks.isEmpty && last.strokes.isEmpty && last.title.isEmpty && last.background == null) {
+      section.pages.removeLast();
+    }
+    _pageIndex = section.pages.length;
+    section.pages.addAll(pages);
+    changed();
+  }
+
   /// Puts a new block on [page] in a free spot and saves.
   void addBlock(NotePage page, Block block) {
     if (!block.isPlaced) page.placeNew(block);

@@ -122,6 +122,8 @@ class NotePage {
     this.paper = PaperStyle.ruled,
     List<Block>? blocks,
     List<InkStroke>? strokes,
+    this.background,
+    this.starred = false,
   })  : id = id ?? newId(),
         blocks = blocks ?? [],
         strokes = strokes ?? [];
@@ -134,12 +136,20 @@ class NotePage {
   /// Drawing on the paper, oldest first. Drawn above the widgets.
   final List<InkStroke> strokes;
 
+  /// A picture under everything on the page, such as a page of an imported PDF.
+  String? background;
+
+  /// Marked as a favourite, to find it quickly in the page overview.
+  bool starred;
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'title': title,
         'paper': paper.name,
         'blocks': blocks.map((b) => b.toJson()).toList(),
         if (strokes.isNotEmpty) 'strokes': strokes.map((s) => s.toJson()).toList(),
+        if (background != null) 'bg': background,
+        if (starred) 'star': true,
       };
 
   factory NotePage.fromJson(Map<String, dynamic> j) => NotePage(
@@ -152,6 +162,8 @@ class NotePage {
         strokes: ((j['strokes'] as List?) ?? [])
             .map((s) => InkStroke.fromJson(s as Map<String, dynamic>))
             .toList(),
+        background: j['bg'] as String?,
+        starred: j['star'] as bool? ?? false,
       );
 
   /// Gives blocks with no position (from older notebooks) a spot,
@@ -610,9 +622,11 @@ class Notebook {
 
   /// Every photo and video still used, including on torn-out pages.
   Set<String> get mediaIds => {
-        for (final page in [...sections.expand((s) => s.pages), ...archive.map((a) => a.page)])
+        for (final page in [...sections.expand((s) => s.pages), ...archive.map((a) => a.page)]) ...[
+          ?page.background,
           for (final b in page.blocks)
             if (b is MediaBlock) b.mediaId,
+        ],
       };
 
   Map<String, dynamic> toJson() => {

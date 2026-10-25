@@ -1,9 +1,15 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../models/notebook.dart';
+import '../data/files.dart';
+import '../data/pdf_tools.dart';
 import 'blocks/block_content.dart';
+import 'blocks/media_view.dart';
 import 'blocks/sticky_view.dart';
 import 'ink.dart';
 import 'paper_painters.dart';
@@ -39,8 +45,12 @@ class PaperPage extends StatefulWidget {
 class _PaperPageState extends State<PaperPage> {
   late final _title = TextEditingController(text: widget.page.title);
   final _canvasKey = GlobalKey();
+  final _pictureKey = GlobalKey();
   String? _selected;
   String? _justAdded;
+
+  /// True while the page is being saved as a PDF: buttons are hidden.
+  bool _exporting = false;
 
   NotePage get _page => widget.page;
   double get _left => widget.bindingOnLeft ? 56 : 28;
@@ -78,6 +88,30 @@ class _PaperPageState extends State<PaperPage> {
     StoreScope.read(context).bringToFront(_page, block);
   }
 
+  /// Saves this page, as it looks, to a PDF file.
+  Future<void> _saveAsPdf() async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() {
+      _exporting = true;
+      _selected = null;
+    });
+    FocusScope.of(context).unfocus();
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+      final boundary = _pictureKey.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final png = await pictureOf(boundary);
+      if (mounted) setState(() => _exporting = false);
+      final pdf = await picturesToPdf([png]);
+      final name = _page.title.trim().isEmpty ? 'Page ${widget.pageNumber}' : _page.title.trim();
+      final saved = await fileIO.save('$name.pdf', pdf, mime: 'application/pdf');
+      if (saved) messenger.showSnackBar(SnackBar(content: Text('Saved "$name.pdf"')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Could not save the PDF: $e')));
+    } finally {
+      if (mounted && _exporting) setState(() => _exporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final page = SizedBox(
@@ -99,6 +133,17 @@ class _PaperPageState extends State<PaperPage> {
                 },
               ),
             ),
+            // Kept clear of the title and the page number.
+            if (_page.background case final bg?)
+              Positioned(
+                left: 10,
+                right: 10,
+                top: 66,
+                bottom: 40,
+                child: IgnorePointer(
+                  child: StoredPicture(mediaId: bg, fit: BoxFit.contain, alignment: Alignment.topCenter),
+                ),
+              ),
             Positioned(left: _left, top: 14, right: _right, child: _header()),
             for (final block in _page.blocks)
               _PlacedBlock(
@@ -130,10 +175,17 @@ class _PaperPageState extends State<PaperPage> {
         ),
       ),
     );
-    return widget.interactive ? page : IgnorePointer(child: page);
+    final picture = RepaintBoundary(key: _pictureKey, child: page);
+    return widget.interactive ? picture : IgnorePointer(child: picture);
   }
 
   Widget _header() {
+    if (_exporting) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [Text(_page.title, style: headingHandwriting), if (_page.title.isNotEmpty) _titleUnderline()],
+      );
+    }
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -202,6 +254,8 @@ class _PaperPageState extends State<PaperPage> {
           case 'ruled' || 'grid' || 'blank':
             _page.paper = PaperStyle.values.byName(value);
             store.changed();
+          case 'pdf':
+            _saveAsPdf();
           case 'tear':
             final archived = store.tearOut(widget.section, _page);
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -221,6 +275,7 @@ class _PaperPageState extends State<PaperPage> {
             ),
           const PopupMenuDivider(),
         ],
+        const PopupMenuItem(value: 'pdf', child: Text('Save page as PDF')),
         const PopupMenuItem(value: 'tear', child: Text('Tear out this page')),
       ],
     );
@@ -495,4 +550,12 @@ class _PlacedBlockState extends State<_PlacedBlock> {
     }
     store.changed();
   }
+}
+
+/// A sharp picture of a page, three times its size on paper.
+Future<Uint8List> pictureOf(RenderRepaintBoundary boundary) async {
+  final image = await boundary.toImage(pixelRatio: 3);
+  final data = await image.toByteData(format: ui.ImageByteFormat.png);
+  image.dispose();
+  return data!.buffer.asUint8List();
 }

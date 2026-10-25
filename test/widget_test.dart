@@ -230,7 +230,9 @@ void main() {
   testWidgets('plain white paper can be chosen instead of the notebook', (tester) async {
     final store = await pumpApp(tester, const Size(1400, 900));
     expect(find.byType(SectionTabs), findsOneWidget);
-    await tester.tap(find.byTooltip('Look and paper colour'));
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Look and paper colour'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Plain paper'));
     await tester.tap(find.text('White'));
