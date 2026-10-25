@@ -16,13 +16,9 @@ enum PaperStyle { ruled, grid, blank }
 
 /// A colored tab down the edge of the notebook, holding its own pages.
 class Section {
-  Section({
-    String? id,
-    required this.name,
-    required this.color,
-    List<NotePage>? pages,
-  })  : id = id ?? newId(),
-        pages = pages ?? [NotePage()];
+  Section({String? id, required this.name, required this.color, List<NotePage>? pages})
+    : id = id ?? newId(),
+      pages = pages ?? [NotePage()];
 
   final String id;
   String name;
@@ -30,20 +26,18 @@ class Section {
   final List<NotePage> pages;
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'color': color,
-        'pages': pages.map((p) => p.toJson()).toList(),
-      };
+    'id': id,
+    'name': name,
+    'color': color,
+    'pages': pages.map((p) => p.toJson()).toList(),
+  };
 
   factory Section.fromJson(Map<String, dynamic> j) => Section(
-        id: j['id'] as String,
-        name: j['name'] as String,
-        color: j['color'] as int,
-        pages: (j['pages'] as List)
-            .map((p) => NotePage.fromJson(p as Map<String, dynamic>))
-            .toList(),
-      );
+    id: j['id'] as String,
+    name: j['name'] as String,
+    color: j['color'] as int,
+    pages: (j['pages'] as List).map((p) => NotePage.fromJson(p as Map<String, dynamic>)).toList(),
+  );
 }
 
 enum InkTool { pen, highlighter }
@@ -59,8 +53,8 @@ class InkPoint {
 /// One line drawn on the paper with a finger, mouse or pen.
 class InkStroke {
   InkStroke({String? id, required this.tool, required this.color, required this.width, List<InkPoint>? points})
-      : id = id ?? newId(),
-        points = points ?? [];
+    : id = id ?? newId(),
+      points = points ?? [];
 
   final String id;
   final InkTool tool;
@@ -72,14 +66,14 @@ class InkStroke {
 
   /// Points are stored flat as x, y, pressure to keep notebooks small.
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'tool': tool.name,
-        'color': color,
-        'width': width,
-        'points': [
-          for (final p in points) ...[_round(p.x), _round(p.y), (p.pressure * 100).roundToDouble() / 100],
-        ],
-      };
+    'id': id,
+    'tool': tool.name,
+    'color': color,
+    'width': width,
+    'points': [
+      for (final p in points) ...[_round(p.x), _round(p.y), (p.pressure * 100).roundToDouble() / 100],
+    ],
+  };
 
   factory InkStroke.fromJson(Map<String, dynamic> j) {
     final flat = (j['points'] as List).map((n) => (n as num).toDouble()).toList();
@@ -91,6 +85,19 @@ class InkStroke {
       points: [for (var i = 0; i + 2 < flat.length; i += 3) InkPoint(flat[i], flat[i + 1], flat[i + 2])],
     );
   }
+
+  /// The same line moved by [dx], [dy] after scaling by [scale] around
+  /// ([ox], [oy]), optionally in another [color].
+  InkStroke transformed({double dx = 0, double dy = 0, double scale = 1, double ox = 0, double oy = 0, int? color}) =>
+      InkStroke(
+        id: id,
+        tool: tool,
+        color: color ?? this.color,
+        width: width * scale,
+        points: [
+          for (final p in points) InkPoint(ox + (p.x - ox) * scale + dx, oy + (p.y - oy) * scale + dy, p.pressure),
+        ],
+      );
 
   /// Whether any part of the line passes within [radius] of [x], [y].
   bool passesNear(double x, double y, double radius) {
@@ -124,9 +131,9 @@ class NotePage {
     List<InkStroke>? strokes,
     this.background,
     this.starred = false,
-  })  : id = id ?? newId(),
-        blocks = blocks ?? [],
-        strokes = strokes ?? [];
+  }) : id = id ?? newId(),
+       blocks = blocks ?? [],
+       strokes = strokes ?? [];
 
   final String id;
   String title;
@@ -143,28 +150,24 @@ class NotePage {
   bool starred;
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'paper': paper.name,
-        'blocks': blocks.map((b) => b.toJson()).toList(),
-        if (strokes.isNotEmpty) 'strokes': strokes.map((s) => s.toJson()).toList(),
-        if (background != null) 'bg': background,
-        if (starred) 'star': true,
-      };
+    'id': id,
+    'title': title,
+    'paper': paper.name,
+    'blocks': blocks.map((b) => b.toJson()).toList(),
+    if (strokes.isNotEmpty) 'strokes': strokes.map((s) => s.toJson()).toList(),
+    if (background != null) 'bg': background,
+    if (starred) 'star': true,
+  };
 
   factory NotePage.fromJson(Map<String, dynamic> j) => NotePage(
-        id: j['id'] as String,
-        title: j['title'] as String? ?? '',
-        paper: PaperStyle.values.asNameMap()[j['paper']] ?? PaperStyle.ruled,
-        blocks: (j['blocks'] as List)
-            .map((b) => Block.fromJson(b as Map<String, dynamic>))
-            .toList(),
-        strokes: ((j['strokes'] as List?) ?? [])
-            .map((s) => InkStroke.fromJson(s as Map<String, dynamic>))
-            .toList(),
-        background: j['bg'] as String?,
-        starred: j['star'] as bool? ?? false,
-      );
+    id: j['id'] as String,
+    title: j['title'] as String? ?? '',
+    paper: PaperStyle.values.asNameMap()[j['paper']] ?? PaperStyle.ruled,
+    blocks: (j['blocks'] as List).map((b) => Block.fromJson(b as Map<String, dynamic>)).toList(),
+    strokes: ((j['strokes'] as List?) ?? []).map((s) => InkStroke.fromJson(s as Map<String, dynamic>)).toList(),
+    background: j['bg'] as String?,
+    starred: j['star'] as bool? ?? false,
+  );
 
   /// Gives blocks with no position (from older notebooks) a spot,
   /// stacked down the page below anything already placed.
@@ -210,17 +213,16 @@ class NotePage {
   }
 
   /// All the words on the page, for search.
-  String get searchableText =>
-      [title, ...blocks.map((b) => b.searchableText)].join('\n');
+  String get searchableText => [title, ...blocks.map((b) => b.searchableText)].join('\n');
 }
 
 /// Something placed on a page: handwriting, a sticky note, a checklist,
 /// a spreadsheet or a calculator. It sits wherever it was dragged to.
 sealed class Block {
   Block({String? id, this.x, this.y, double? width, this.angle = 0})
-      : id = id ?? newId(),
-        // ignore: prefer_initializing_formals
-        _width = width;
+    : id = id ?? newId(),
+      // ignore: prefer_initializing_formals
+      _width = width;
 
   final String id;
 
@@ -238,14 +240,13 @@ sealed class Block {
 
   /// Roughly how tall the block draws, for finding free space.
   double get estimatedHeight => switch (this) {
-        TextBlock(:final text, :final kind) =>
-          kind == TextKind.heading ? 44 : 28.0 * '\n'.allMatches(text).length + 32,
-        StickyBlock() => width,
-        ChecklistBlock(:final items) => 30.0 * items.length,
-        SheetBlock(:final rows, :final naturalWidth) => (rows + 2) * 24 * width / naturalWidth,
-        CalculatorBlock() => 330 * width / CalculatorBlock.naturalWidth,
-        MediaBlock(:final aspect, :final todos) => (width - 16) / aspect + 70 + 30.0 * todos.items.length,
-      };
+    TextBlock(:final text, :final kind) => kind == TextKind.heading ? 44 : 28.0 * '\n'.allMatches(text).length + 32,
+    StickyBlock() => width,
+    ChecklistBlock(:final items) => 30.0 * items.length,
+    SheetBlock(:final rows, :final naturalWidth) => (rows + 2) * 24 * width / naturalWidth,
+    CalculatorBlock() => 330 * width / CalculatorBlock.naturalWidth,
+    MediaBlock(:final aspect, :final todos) => (width - 16) / aspect + 70 + 30.0 * todos.items.length,
+  };
   set width(double w) => _width = w;
   bool get isPlaced => x != null && y != null;
 
@@ -253,11 +254,11 @@ sealed class Block {
   String get searchableText;
 
   Map<String, dynamic> layoutJson() => {
-        if (x != null) 'x': x,
-        if (y != null) 'y': y,
-        if (_width != null) 'w': _width,
-        if (angle != 0) 'angle': angle,
-      };
+    if (x != null) 'x': x,
+    if (y != null) 'y': y,
+    if (_width != null) 'w': _width,
+    if (angle != 0) 'angle': angle,
+  };
 
   void readLayout(Map<String, dynamic> j) {
     x = (j['x'] as num?)?.toDouble();
@@ -304,20 +305,20 @@ class TextBlock extends Block {
 
   @override
   Map<String, dynamic> toJson() => {
-        ...layoutJson(),
-        'type': 'text',
-        'id': id,
-        'text': text,
-        'kind': kind.name,
-        'highlight': highlight,
-      };
+    ...layoutJson(),
+    'type': 'text',
+    'id': id,
+    'text': text,
+    'kind': kind.name,
+    'highlight': highlight,
+  };
 
   factory TextBlock.fromJson(Map<String, dynamic> j) => TextBlock(
-        id: j['id'] as String,
-        text: j['text'] as String? ?? '',
-        kind: TextKind.values.asNameMap()[j['kind']] ?? TextKind.body,
-        highlight: j['highlight'] as bool? ?? false,
-      );
+    id: j['id'] as String,
+    text: j['text'] as String? ?? '',
+    kind: TextKind.values.asNameMap()[j['kind']] ?? TextKind.body,
+    highlight: j['highlight'] as bool? ?? false,
+  );
 
   @override
   String get searchableText => text;
@@ -334,19 +335,10 @@ class StickyBlock extends Block {
   double get defaultWidth => 170;
 
   @override
-  Map<String, dynamic> toJson() => {
-        ...layoutJson(),
-        'type': 'sticky',
-        'id': id,
-        'text': text,
-        'color': color,
-      };
+  Map<String, dynamic> toJson() => {...layoutJson(), 'type': 'sticky', 'id': id, 'text': text, 'color': color};
 
-  factory StickyBlock.fromJson(Map<String, dynamic> j) => StickyBlock(
-        id: j['id'] as String,
-        text: j['text'] as String? ?? '',
-        color: j['color'] as int? ?? 0xFFFFF59D,
-      );
+  factory StickyBlock.fromJson(Map<String, dynamic> j) =>
+      StickyBlock(id: j['id'] as String, text: j['text'] as String? ?? '', color: j['color'] as int? ?? 0xFFFFF59D);
 
   @override
   String get searchableText => text;
@@ -359,16 +351,13 @@ class ChecklistItem {
   bool done;
 
   Map<String, dynamic> toJson() => {'id': id, 'text': text, 'done': done};
-  factory ChecklistItem.fromJson(Map<String, dynamic> j) => ChecklistItem(
-        id: j['id'] as String,
-        text: j['text'] as String? ?? '',
-        done: j['done'] as bool? ?? false,
-      );
+  factory ChecklistItem.fromJson(Map<String, dynamic> j) =>
+      ChecklistItem(id: j['id'] as String, text: j['text'] as String? ?? '', done: j['done'] as bool? ?? false);
 }
 
 class ChecklistBlock extends Block {
   ChecklistBlock({super.id, super.x, super.y, super.width, List<ChecklistItem>? items})
-      : items = items ?? [ChecklistItem()];
+    : items = items ?? [ChecklistItem()];
 
   final List<ChecklistItem> items;
 
@@ -377,18 +366,16 @@ class ChecklistBlock extends Block {
 
   @override
   Map<String, dynamic> toJson() => {
-        ...layoutJson(),
-        'type': 'checklist',
-        'id': id,
-        'items': items.map((i) => i.toJson()).toList(),
-      };
+    ...layoutJson(),
+    'type': 'checklist',
+    'id': id,
+    'items': items.map((i) => i.toJson()).toList(),
+  };
 
   factory ChecklistBlock.fromJson(Map<String, dynamic> j) => ChecklistBlock(
-        id: j['id'] as String,
-        items: (j['items'] as List)
-            .map((i) => ChecklistItem.fromJson(i as Map<String, dynamic>))
-            .toList(),
-      );
+    id: j['id'] as String,
+    items: (j['items'] as List).map((i) => ChecklistItem.fromJson(i as Map<String, dynamic>)).toList(),
+  );
 
   @override
   String get searchableText => items.map((i) => i.text).join('\n');
@@ -397,8 +384,7 @@ class ChecklistBlock extends Block {
 /// A small spreadsheet. Cells hold raw input; formulas start with "=".
 class SheetBlock extends Block {
   SheetBlock({super.id, super.x, super.y, super.width, int rows = 6, int cols = 4, List<List<String>>? cells})
-      : cells = cells ??
-            List.generate(rows, (_) => List.filled(cols, '', growable: true));
+    : cells = cells ?? List.generate(rows, (_) => List.filled(cols, '', growable: true));
 
   final List<List<String>> cells;
 
@@ -437,11 +423,9 @@ class SheetBlock extends Block {
   Map<String, dynamic> toJson() => {...layoutJson(), 'type': 'sheet', 'id': id, 'cells': cells};
 
   factory SheetBlock.fromJson(Map<String, dynamic> j) => SheetBlock(
-        id: j['id'] as String,
-        cells: (j['cells'] as List)
-            .map((r) => (r as List).map((c) => c as String).toList())
-            .toList(),
-      );
+    id: j['id'] as String,
+    cells: (j['cells'] as List).map((r) => (r as List).map((c) => c as String).toList()).toList(),
+  );
 
   @override
   String get searchableText => cells.expand((r) => r).join(' ');
@@ -463,14 +447,19 @@ class CalculatorBlock extends Block {
   double get minWidth => 130;
 
   @override
-  Map<String, dynamic> toJson() =>
-      {...layoutJson(), 'type': 'calculator', 'id': id, 'display': display, 'memory': memory};
+  Map<String, dynamic> toJson() => {
+    ...layoutJson(),
+    'type': 'calculator',
+    'id': id,
+    'display': display,
+    'memory': memory,
+  };
 
   factory CalculatorBlock.fromJson(Map<String, dynamic> j) => CalculatorBlock(
-        id: j['id'] as String,
-        display: j['display'] as String? ?? '0',
-        memory: (j['memory'] as num?)?.toDouble() ?? 0,
-      );
+    id: j['id'] as String,
+    display: j['display'] as String? ?? '0',
+    memory: (j['memory'] as num?)?.toDouble() ?? 0,
+  );
 
   @override
   String get searchableText => display;
@@ -522,33 +511,30 @@ class MediaBlock extends Block {
 
   @override
   Map<String, dynamic> toJson() => {
-        ...layoutJson(),
-        'type': 'media',
-        'id': id,
-        'media': mediaId,
-        'kind': kind.name,
-        'aspect': aspect,
-        if (name.isNotEmpty) 'name': name,
-        if (note.isNotEmpty) 'note': note,
-        if (place.isNotEmpty) 'place': place,
-        if (todos.items.isNotEmpty) 'todos': todos.items.map((i) => i.toJson()).toList(),
-      };
+    ...layoutJson(),
+    'type': 'media',
+    'id': id,
+    'media': mediaId,
+    'kind': kind.name,
+    'aspect': aspect,
+    if (name.isNotEmpty) 'name': name,
+    if (note.isNotEmpty) 'note': note,
+    if (place.isNotEmpty) 'place': place,
+    if (todos.items.isNotEmpty) 'todos': todos.items.map((i) => i.toJson()).toList(),
+  };
 
   factory MediaBlock.fromJson(Map<String, dynamic> j) => MediaBlock(
-        id: j['id'] as String,
-        mediaId: j['media'] as String,
-        kind: MediaKind.values.asNameMap()[j['kind']] ?? MediaKind.photo,
-        aspect: (j['aspect'] as num?)?.toDouble() ?? 4 / 3,
-        name: j['name'] as String? ?? '',
-        note: j['note'] as String? ?? '',
-        place: j['place'] as String? ?? '',
-        todos: ChecklistBlock(
-          items: [
-            for (final i in (j['todos'] as List? ?? const []))
-              ChecklistItem.fromJson(i as Map<String, dynamic>),
-          ],
-        ),
-      );
+    id: j['id'] as String,
+    mediaId: j['media'] as String,
+    kind: MediaKind.values.asNameMap()[j['kind']] ?? MediaKind.photo,
+    aspect: (j['aspect'] as num?)?.toDouble() ?? 4 / 3,
+    name: j['name'] as String? ?? '',
+    note: j['note'] as String? ?? '',
+    place: j['place'] as String? ?? '',
+    todos: ChecklistBlock(
+      items: [for (final i in (j['todos'] as List? ?? const [])) ChecklistItem.fromJson(i as Map<String, dynamic>)],
+    ),
+  );
 
   @override
   String get searchableText => [name, note, place, todos.searchableText].join('\n');
@@ -581,20 +567,20 @@ class ArchivedPage {
   }
 
   Map<String, dynamic> toJson() => {
-        'page': page.toJson(),
-        'sectionId': sectionId,
-        'sectionName': sectionName,
-        'sectionColor': sectionColor,
-        'tornAt': tornAt.toUtc().toIso8601String(),
-      };
+    'page': page.toJson(),
+    'sectionId': sectionId,
+    'sectionName': sectionName,
+    'sectionColor': sectionColor,
+    'tornAt': tornAt.toUtc().toIso8601String(),
+  };
 
   factory ArchivedPage.fromJson(Map<String, dynamic> j) => ArchivedPage(
-        page: NotePage.fromJson(j['page'] as Map<String, dynamic>),
-        sectionId: j['sectionId'] as String,
-        sectionName: j['sectionName'] as String,
-        sectionColor: j['sectionColor'] as int,
-        tornAt: DateTime.parse(j['tornAt'] as String),
-      );
+    page: NotePage.fromJson(j['page'] as Map<String, dynamic>),
+    sectionId: j['sectionId'] as String,
+    sectionName: j['sectionName'] as String,
+    sectionColor: j['sectionColor'] as int,
+    tornAt: DateTime.parse(j['tornAt'] as String),
+  );
 }
 
 /// How the app looks: a spiral notebook on a desk, or plain paper filling the screen.
@@ -622,31 +608,27 @@ class Notebook {
 
   /// Every photo and video still used, including on torn-out pages.
   Set<String> get mediaIds => {
-        for (final page in [...sections.expand((s) => s.pages), ...archive.map((a) => a.page)]) ...[
-          ?page.background,
-          for (final b in page.blocks)
-            if (b is MediaBlock) b.mediaId,
-        ],
-      };
+    for (final page in [...sections.expand((s) => s.pages), ...archive.map((a) => a.page)]) ...[
+      ?page.background,
+      for (final b in page.blocks)
+        if (b is MediaBlock) b.mediaId,
+    ],
+  };
 
   Map<String, dynamic> toJson() => {
-        'version': 2,
-        'title': title,
-        'look': look.name,
-        'tone': tone.name,
-        'sections': sections.map((s) => s.toJson()).toList(),
-        'archive': archive.map((a) => a.toJson()).toList(),
-      };
+    'version': 2,
+    'title': title,
+    'look': look.name,
+    'tone': tone.name,
+    'sections': sections.map((s) => s.toJson()).toList(),
+    'archive': archive.map((a) => a.toJson()).toList(),
+  };
 
   factory Notebook.fromJson(Map<String, dynamic> j) => Notebook(
-        title: j['title'] as String? ?? 'My Notebook',
-        look: Look.values.asNameMap()[j['look']] ?? Look.notebook,
-        tone: PaperTone.values.asNameMap()[j['tone']] ?? PaperTone.cream,
-        sections: (j['sections'] as List)
-            .map((s) => Section.fromJson(s as Map<String, dynamic>))
-            .toList(),
-        archive: ((j['archive'] as List?) ?? [])
-            .map((a) => ArchivedPage.fromJson(a as Map<String, dynamic>))
-            .toList(),
-      );
+    title: j['title'] as String? ?? 'My Notebook',
+    look: Look.values.asNameMap()[j['look']] ?? Look.notebook,
+    tone: PaperTone.values.asNameMap()[j['tone']] ?? PaperTone.cream,
+    sections: (j['sections'] as List).map((s) => Section.fromJson(s as Map<String, dynamic>)).toList(),
+    archive: ((j['archive'] as List?) ?? []).map((a) => ArchivedPage.fromJson(a as Map<String, dynamic>)).toList(),
+  );
 }

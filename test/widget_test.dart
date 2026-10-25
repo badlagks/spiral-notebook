@@ -290,4 +290,43 @@ void main() {
     expect(store.section.pages[0].title, 'Draft Outline');
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('the lasso moves, recolours and deletes circled lines', (tester) async {
+    final store = await pumpApp(tester, const Size(390, 844));
+    final page = store.page;
+    await tester.tap(find.byTooltip('Draw on the paper'));
+    await tester.pumpAndSettle();
+    final c = tester.getCenter(find.byType(PaperPage)) + const Offset(0, 140);
+    var g = await tester.startGesture(c, kind: PointerDeviceKind.touch);
+    for (var i = 1; i <= 8; i++) {
+      await g.moveTo(c + Offset(i * 5.0, 0));
+    }
+    await g.up();
+    await tester.pump();
+    final before = page.strokes.single.points.first.x;
+
+    // Circle it.
+    await tester.tap(find.byTooltip('Lasso: circle lines to move, resize or recolour them'));
+    await tester.pump();
+    g = await tester.startGesture(c + const Offset(-20, -20), kind: PointerDeviceKind.touch);
+    for (final o in const [Offset(70, -20), Offset(70, 20), Offset(-20, 20), Offset(-20, -18)]) {
+      await g.moveTo(c + o);
+    }
+    await g.up();
+    await tester.pump();
+    final ink = InkScope.read(tester.element(find.byType(PaperPage)));
+    expect(ink.hasSelection, isTrue);
+
+    // Drag it to the right.
+    g = await tester.startGesture(c + const Offset(20, 0), kind: PointerDeviceKind.touch);
+    await g.moveTo(c + const Offset(50, 0));
+    await g.moveTo(c + const Offset(80, 0));
+    await g.up();
+    await tester.pump();
+    expect(page.strokes.single.points.first.x, greaterThan(before + 30));
+
+    await tester.tap(find.byTooltip('Undo'));
+    await tester.pump();
+    expect(page.strokes.single.points.first.x, closeTo(before, 0.01));
+  });
 }
