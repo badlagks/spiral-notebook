@@ -1,0 +1,80 @@
+# Builds the notebook for every device on each push, and keeps the files
+# for download under the run's "Artifacts".
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: '3.47.8'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  android:
+    # One APK for Android phones and Chromebooks.
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spiral-notebook-android
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+  web:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter build web --release --no-web-resources-cdn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spiral-notebook-web
+          path: build/web
+
+  apple:
+    # The Mac app, and an unsigned iPhone build that checks it compiles.
+    # Installing on an iPhone needs an Apple developer account (TestFlight).
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter build macos --release
+      - name: Zip the Mac app
+        run: cd build/macos/Build/Products/Release && ditto -c -k --keepParent spiral_notebook.app spiral-notebook-mac.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spiral-notebook-mac
+          path: build/macos/Build/Products/Release/spiral-notebook-mac.zip
+      - run: flutter build ios --release --no-codesign
