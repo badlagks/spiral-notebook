@@ -6,7 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/notebook.dart';
+import 'alarms/alarms.dart';
 import 'media/media_store.dart';
+import 'phone_calendar.dart';
 import 'sample_notebook.dart';
 
 enum SaveState { saved, saving, failed }
@@ -100,6 +102,7 @@ class NotebookStore extends ChangeNotifier {
     }
     final store = NotebookStore._(nb ?? sampleNotebook(), prefs);
     store.purgeArchive(DateTime.now());
+    unawaited(alarms.init().then((_) => store.syncAlarms()));
     // Photos and videos from erased widgets or long-gone pages. Only once
     // the notebook loaded, so a damaged save never costs anyone their photos.
     if (nb != null) {
@@ -245,7 +248,8 @@ class NotebookStore extends ChangeNotifier {
     notebook
       ..title = nb.title
       ..look = nb.look
-      ..tone = nb.tone;
+      ..tone = nb.tone
+      ..showPhoneCalendar = nb.showPhoneCalendar;
     notebook.sections
       ..clear()
       ..addAll(nb.sections);
@@ -304,6 +308,82 @@ class NotebookStore extends ChangeNotifier {
     changed();
   }
 
+  /// Every reminder in the notebook, soonest first. Torn-out pages don't ring.
+  List<SetReminder> get reminders {
+    final all = <SetReminder>[];
+    for (var s = 0; s < sections.length; s++) {
+      final sec = sections[s];
+      for (var p = 0; p < sec.pages.length; p++) {
+        for (final b in sec.pages[p].blocks) {
+          if (b.reminder != null) all.add(SetReminder(sec, sec.pages[p], b, s, p));
+        }
+      }
+    }
+    return all..sort((a, b) => a.reminder.at.compareTo(b.reminder.at));
+  }
+
+  /// Sets, moves or (with null) removes a block's reminder. Its event in the
+  /// phone's calendar is replaced too, or removed.
+  Future<void> setReminder(Block block, Reminder? reminder, {bool addToPhoneCalendar = false}) async {
+    final oldEvent = block.reminder?.calendarEventId;
+    if (oldEvent != null) await phoneCalendar.remove(oldEvent);
+    block.reminder = reminder;
+    if (reminder != null && addToPhoneCalendar) {
+      final where = reminders.where((r) => r.block == block).firstOrNull;
+      reminder.calendarEventId = await phoneCalendar.add(
+        reminderLabel(block),
+        reminder.at,
+        where == null ? 'From your notebook' : 'From your notebook: ${where.section.name}, page ${where.pageIndex + 1}',
+      );
+    }
+    changed();
+    await syncAlarms();
+  }
+
+  final _scheduled = <int, DateTime>{};
+
+  /// Brings the device's alarms in line with the notebook: one for each
+  /// reminder still to come, none for erased widgets or torn-out pages.
+  Future<void> syncAlarms({DateTime? now}) async {
+    final when = now ?? DateTime.now();
+    final wanted = <int, SetReminder>{
+      for (final r in reminders)
+        if (!r.reminder.rang && r.reminder.at.isAfter(when)) Reminder.alarmId(r.block.id): r,
+    };
+    for (final id in _scheduled.keys.toList()) {
+      if (wanted[id]?.reminder.at != _scheduled[id]) {
+        _scheduled.remove(id);
+        await alarms.cancel(id);
+      }
+    }
+    for (final MapEntry(key: id, value: r) in wanted.entries) {
+      if (_scheduled[id] == r.reminder.at) continue;
+      _scheduled[id] = r.reminder.at;
+      // A locked section's reminder doesn't show its words on the lock screen.
+      await alarms.schedule(
+        id,
+        r.reminder.at,
+        r.section.lock != null ? 'Notebook reminder' : r.section.name,
+        r.section.lock != null ? 'A reminder in a locked section' : reminderLabel(r.block),
+      );
+    }
+  }
+
+  /// Reminders whose time has come but which haven't rung in the app yet.
+  /// Marks them as rung.
+  List<SetReminder> takeDue(DateTime now) {
+    final due = [
+      for (final r in reminders)
+        if (!r.reminder.rang && !r.reminder.at.isAfter(now)) r,
+    ];
+    if (due.isEmpty) return due;
+    for (final r in due) {
+      r.reminder.rang = true;
+    }
+    changed();
+    return due;
+  }
+
   /// Call after editing any model so the change is shown and saved.
   void changed() {
     notifyListeners();
@@ -327,6 +407,8 @@ class NotebookStore extends ChangeNotifier {
     if (prefs == null) return;
     try {
       final ok = await prefs.setString(_key, jsonEncode(notebook.toJson()));
+      // Erased widgets and torn-out pages stop ringing.
+      unawaited(syncAlarms());
       saveState.value = ok ? SaveState.saved : SaveState.failed;
     } catch (e) {
       debugPrint('Save failed: $e');
@@ -361,6 +443,41 @@ class NotebookStore extends ChangeNotifier {
     appearance.dispose();
     super.dispose();
   }
+}
+
+/// A reminder and where it lives.
+class SetReminder {
+  SetReminder(this.section, this.page, this.block, this.sectionIndex, this.pageIndex);
+  final Section section;
+  final NotePage page;
+  final Block block;
+  final int sectionIndex;
+  final int pageIndex;
+  Reminder get reminder => block.reminder!;
+}
+
+/// A few words saying what a reminder is about.
+String reminderLabel(Block b) {
+  String firstLine(String t) => t
+      .split('\n')
+      .map((l) => l.replaceFirst(RegExp(r'^\s*[-•*]\s'), '').trim())
+      .firstWhere((l) => l.isNotEmpty, orElse: () => '');
+  final text = switch (b) {
+    TextBlock(:final text) => firstLine(text),
+    StickyBlock(:final text) => firstLine(text),
+    ChecklistBlock(:final items) => items.map((i) => i.text.trim()).where((t) => t.isNotEmpty).take(2).join(', '),
+    SheetBlock() => 'Your spreadsheet',
+    CalculatorBlock() => 'Your calculator',
+    MediaBlock(:final note, :final name) => firstLine(note).isNotEmpty ? firstLine(note) : name,
+  };
+  final fallback = switch (b) {
+    ChecklistBlock() => 'Your checklist',
+    StickyBlock() => 'Your sticky note',
+    MediaBlock(:final kind) => kind == MediaKind.video ? 'Your video' : 'Your photo',
+    _ => 'Your note',
+  };
+  final label = text.isEmpty ? fallback : text;
+  return label.length > 80 ? '${label.substring(0, 79)}…' : label;
 }
 
 class SearchHit {

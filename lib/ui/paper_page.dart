@@ -13,6 +13,7 @@ import 'blocks/media_view.dart';
 import 'blocks/sticky_view.dart';
 import 'ink.dart';
 import 'paper_painters.dart';
+import 'reminders_ui.dart';
 import 'store_scope.dart';
 import 'template_picker.dart';
 import 'theme.dart';
@@ -407,6 +408,13 @@ class _PlacedBlockState extends State<_PlacedBlock> {
                   child: IgnorePointer(ignoring: !showHandle, child: _handle()),
                 ),
               ),
+              if (_b.reminder != null)
+                Positioned(
+                  // Pinned to the widget's top corner, just below the handle.
+                  right: _side - 6,
+                  top: _handleRoom - 4,
+                  child: ReminderBadge(block: _b),
+                ),
               if (widget.selected)
                 Positioned(
                   right: 0,
@@ -526,6 +534,8 @@ class _PlacedBlockState extends State<_PlacedBlock> {
         ),
         const PopupMenuDivider(),
       ],
+      PopupMenuItem(value: 'remind', child: Text(b.reminder == null ? 'Remind me…' : 'Change reminder…')),
+      const PopupMenuDivider(),
       const PopupMenuItem(value: 'tilt-left', child: Text('Tilt left')),
       const PopupMenuItem(value: 'straighten', child: Text('Straighten')),
       const PopupMenuItem(value: 'tilt-right', child: Text('Tilt right')),
@@ -539,6 +549,9 @@ class _PlacedBlockState extends State<_PlacedBlock> {
     final store = StoreScope.read(context);
     final b = _b;
     switch (value) {
+      case 'remind':
+        showReminderEditor(context, b);
+        return;
       case 'highlight':
         (b as TextBlock).highlight = !b.highlight;
       case 'heading':
@@ -551,7 +564,9 @@ class _PlacedBlockState extends State<_PlacedBlock> {
       case 'straighten':
         b.angle = 0;
       case 'duplicate':
-        final json = b.toJson()..['id'] = newId();
+        final json = b.toJson()
+          ..['id'] = newId()
+          ..remove('remind');
         final copy = Block.fromJson(json)
           ..x = b.x! + 20
           ..y = b.y! + 20;

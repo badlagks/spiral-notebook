@@ -239,6 +239,9 @@ sealed class Block {
   /// A slight tilt in degrees, so things look placed by hand.
   double angle;
 
+  /// When to remind about this block, if ever.
+  Reminder? reminder;
+
   double get defaultWidth;
   double get minWidth => 120;
   double get width => _width ?? defaultWidth;
@@ -263,6 +266,7 @@ sealed class Block {
     if (y != null) 'y': y,
     if (_width != null) 'w': _width,
     if (angle != 0) 'angle': angle,
+    if (reminder != null) 'remind': reminder!.toJson(),
   };
 
   void readLayout(Map<String, dynamic> j) {
@@ -270,6 +274,8 @@ sealed class Block {
     y = (j['y'] as num?)?.toDouble();
     _width = (j['w'] as num?)?.toDouble();
     angle = (j['angle'] as num?)?.toDouble() ?? 0;
+    final r = j['remind'];
+    reminder = r is Map<String, dynamic> ? Reminder.fromJson(r) : null;
   }
 
   static Block fromJson(Map<String, dynamic> j) {
@@ -284,6 +290,40 @@ sealed class Block {
     };
     return b..readLayout(j);
   }
+}
+
+/// A time to be reminded about a block, with a sound.
+class Reminder {
+  Reminder({required this.at, this.rang = false, this.calendarEventId});
+
+  final DateTime at;
+
+  /// True once it has gone off, so it rings only once.
+  bool rang;
+
+  /// The matching event in the phone's own calendar, if one was added.
+  String? calendarEventId;
+
+  /// A number for the device's alarm, the same every time for [blockId].
+  static int alarmId(String blockId) {
+    var h = 0x811c9dc5;
+    for (final c in blockId.codeUnits) {
+      h = ((h ^ c) * 0x01000193) & 0x7fffffff;
+    }
+    return h;
+  }
+
+  Map<String, dynamic> toJson() => {
+    'at': at.toUtc().toIso8601String(),
+    if (rang) 'rang': true,
+    if (calendarEventId != null) 'cal': calendarEventId,
+  };
+
+  factory Reminder.fromJson(Map<String, dynamic> j) => Reminder(
+    at: DateTime.parse(j['at'] as String).toLocal(),
+    rang: j['rang'] as bool? ?? false,
+    calendarEventId: j['cal'] as String?,
+  );
 }
 
 enum TextKind { heading, body }
@@ -607,11 +647,15 @@ class Notebook {
     List<ArchivedPage>? archive,
     this.look = Look.notebook,
     this.tone = PaperTone.cream,
+    this.showPhoneCalendar = false,
   }) : archive = archive ?? [];
 
   String title;
   Look look;
   PaperTone tone;
+
+  /// Whether the calendar also shows the phone's own events.
+  bool showPhoneCalendar;
   final List<Section> sections;
 
   /// Torn-out pages, newest first.
@@ -631,6 +675,7 @@ class Notebook {
     'title': title,
     'look': look.name,
     'tone': tone.name,
+    if (showPhoneCalendar) 'phoneCal': true,
     'sections': sections.map((s) => s.toJson()).toList(),
     'archive': archive.map((a) => a.toJson()).toList(),
   };
@@ -639,6 +684,7 @@ class Notebook {
     title: j['title'] as String? ?? 'My Notebook',
     look: Look.values.asNameMap()[j['look']] ?? Look.notebook,
     tone: PaperTone.values.asNameMap()[j['tone']] ?? PaperTone.cream,
+    showPhoneCalendar: j['phoneCal'] as bool? ?? false,
     sections: (j['sections'] as List).map((s) => Section.fromJson(s as Map<String, dynamic>)).toList(),
     archive: ((j['archive'] as List?) ?? []).map((a) => ArchivedPage.fromJson(a as Map<String, dynamic>)).toList(),
   );

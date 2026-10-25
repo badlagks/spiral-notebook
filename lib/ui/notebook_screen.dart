@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../data/notebook_store.dart';
 import '../models/notebook.dart';
 import 'archive_dialog.dart';
+import 'calendar_screen.dart';
 import 'ink.dart';
 import 'look_picker.dart';
 import 'notebook_actions.dart';
@@ -11,6 +12,7 @@ import 'page_overview.dart';
 import 'template_picker.dart';
 import 'page_flip.dart';
 import 'paper_page.dart';
+import 'reminders_ui.dart';
 import 'search_dialog.dart';
 import 'section_lock.dart';
 import 'section_tabs.dart';
@@ -55,34 +57,36 @@ class _NotebookScreenState extends State<NotebookScreen> {
           },
           child: Focus(
             autofocus: true,
-            child: Scaffold(
-              body: DecoratedBox(
-                decoration: Paper.plain
-                    ? BoxDecoration(color: Paper.sheet)
-                    : const BoxDecoration(
-                        gradient: RadialGradient(
-                          center: Alignment(0, -0.3),
-                          radius: 1.2,
-                          colors: [Color(0xFF4A4540), Paper.desk],
+            child: ReminderWatcher(
+              child: Scaffold(
+                body: DecoratedBox(
+                  decoration: Paper.plain
+                      ? BoxDecoration(color: Paper.sheet)
+                      : const BoxDecoration(
+                          gradient: RadialGradient(
+                            center: Alignment(0, -0.3),
+                            radius: 1.2,
+                            colors: [Color(0xFF4A4540), Paper.desk],
+                          ),
                         ),
-                      ),
-                child: SafeArea(
-                  child: Column(
-                    children: [
-                      _TopBar(spread: spread, flip: _flip),
-                      Expanded(
-                        child: Stack(
-                          children: [
-                            Positioned.fill(
-                              child: _Book(spread: spread, flip: _flip),
-                            ),
-                            if (InkScope.of(context).drawing)
-                              const Positioned(left: 8, right: 8, bottom: 8, child: Center(child: DrawToolbar())),
-                          ],
+                  child: SafeArea(
+                    child: Column(
+                      children: [
+                        _TopBar(spread: spread, flip: _flip),
+                        Expanded(
+                          child: Stack(
+                            children: [
+                              Positioned.fill(
+                                child: _Book(spread: spread, flip: _flip),
+                              ),
+                              if (InkScope.of(context).drawing)
+                                const Positioned(left: 8, right: 8, bottom: 8, child: Center(child: DrawToolbar())),
+                            ],
+                          ),
                         ),
-                      ),
-                      if (!spread) _PageBar(flip: _flip),
-                    ],
+                        if (!spread) _PageBar(flip: _flip),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -132,6 +136,7 @@ class _TopBar extends StatelessWidget {
           const _SaveBadge(),
           const SizedBox(width: 4),
           _iconButton(Icons.grid_view_outlined, 'All pages', () => showPageOverview(context)),
+          _iconButton(Icons.calendar_month_outlined, 'Calendar', () => showCalendar(context)),
           const _MoreMenu(),
           const _DrawButton(),
           const SizedBox(width: 4),

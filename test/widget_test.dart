@@ -1,13 +1,16 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:spiral_notebook/data/alarms/alarms.dart';
 import 'package:spiral_notebook/data/notebook_store.dart';
+import 'package:spiral_notebook/data/phone_calendar.dart';
 import 'package:spiral_notebook/data/sample_notebook.dart';
 import 'package:spiral_notebook/main.dart';
 import 'package:spiral_notebook/models/notebook.dart';
 import 'package:spiral_notebook/ui/ink.dart';
 import 'package:spiral_notebook/ui/page_flip.dart';
 import 'package:spiral_notebook/ui/paper_page.dart';
+import 'package:spiral_notebook/ui/calendar_screen.dart';
 import 'package:spiral_notebook/ui/section_lock.dart';
 import 'package:spiral_notebook/ui/section_tabs.dart';
 import 'package:spiral_notebook/ui/blocks/calculator_view.dart';
@@ -17,6 +20,8 @@ Future<NotebookStore> pumpApp(WidgetTester tester, Size size) async {
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   deviceUnlock = _FakeDeviceUnlock(hasSensor: false);
+  alarms = QuietAlarms();
+  phoneCalendar = FakePhoneCalendar();
   final store = NotebookStore.memory(sampleNotebook());
   await tester.pumpWidget(NotebookApp(store: store));
   await tester.pumpAndSettle();
@@ -410,6 +415,135 @@ void main() {
     expect(store.isLocked(ideas), isFalse);
     expect(store.isArchiveLocked(store.archive.single), isFalse);
   });
+
+  testWidgets('reminders set the device alarm, move, stop on torn-out pages, and go to the phone calendar', (
+    tester,
+  ) async {
+    final store = await pumpApp(tester, const Size(1400, 900));
+    final quiet = alarms as QuietAlarms;
+    final cal = phoneCalendar as FakePhoneCalendar;
+    final page = store.sections.first.pages.first;
+    final sticky = page.blocks.whereType<StickyBlock>().first;
+    final id = Reminder.alarmId(sticky.id);
+    final at = DateTime.now().add(const Duration(days: 2));
+
+    await store.setReminder(sticky, Reminder(at: at), addToPhoneCalendar: true);
+    expect(quiet.scheduled[id], at);
+    expect(cal.added.values.single.$1, 'Call Sam about the sketches');
+
+    // Moving it moves the alarm and replaces the calendar event.
+    final later = at.add(const Duration(hours: 3));
+    await store.setReminder(sticky, Reminder(at: later), addToPhoneCalendar: true);
+    expect(quiet.scheduled[id], later);
+    expect(cal.added.values.single.$2, later);
+
+    // Saved with the notebook.
+    final copy = Notebook.fromJson(store.notebook.toJson());
+    final saved = copy.sections.first.pages.first.blocks.whereType<StickyBlock>().first.reminder!;
+    expect(saved.at, later);
+    expect(saved.calendarEventId, sticky.reminder!.calendarEventId);
+
+    // A torn-out page stops ringing; restoring it brings the alarm back.
+    final torn = store.tearOut(store.sections.first, page);
+    await store.syncAlarms();
+    expect(quiet.scheduled.containsKey(id), isFalse);
+    store.restore(torn);
+    await store.syncAlarms();
+    expect(quiet.scheduled[id], later);
+
+    // Removing it clears everything.
+    await store.setReminder(sticky, null);
+    expect(quiet.scheduled, isEmpty);
+    expect(cal.added, isEmpty);
+    expect(sticky.reminder, isNull);
+  });
+
+  testWidgets('a reminder is set from the widget menu', (tester) async {
+    final store = await pumpApp(tester, const Size(1400, 900));
+    final sticky = store.sections.first.pages.first.blocks.whereType<StickyBlock>().first;
+    await tester.tap(find.text('Call Sam about the sketches'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Widget options').hitTestable().first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remind me…'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tomorrow morning'));
+    await tester.pump();
+    expect(find.textContaining('Rings Tomorrow'), findsOneWidget);
+    await tester.tap(find.text("Also add it to my phone's calendar"));
+    await tester.pump();
+    await tester.tap(find.text('Set reminder'));
+    await tester.pumpAndSettle();
+
+    final now = DateTime.now();
+    expect(sticky.reminder!.at, DateTime(now.year, now.month, now.day + 1, 9));
+    expect(sticky.reminder!.calendarEventId, isNotNull);
+    expect((alarms as QuietAlarms).scheduled, hasLength(1));
+    // The bell shows on the widget.
+    expect(find.textContaining('Tomorrow'), findsOneWidget);
+  });
+
+  testWidgets('a due reminder rings and opens its page; the calendar lists it', (tester) async {
+    final store = await pumpApp(tester, const Size(1400, 900));
+    final budget = store.sections[2].pages.first;
+    final block = budget.blocks.first;
+    block.reminder = Reminder(at: DateTime.now().add(const Duration(seconds: 5)));
+    store.changed();
+    await tester.pumpAndSettle();
+
+    // The calendar shows it today, and tapping it opens the page.
+    await tester.tap(find.byTooltip('Calendar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Calendar'), findsWidgets);
+    expect(find.textContaining('Finances, page 1'), findsOneWidget);
+    await tester.tap(find.textContaining('Finances, page 1'));
+    await tester.pumpAndSettle();
+    expect(store.section.name, 'Finances');
+
+    // Back to the first section, then the clock passes the reminder.
+    store.openSection(0);
+    await tester.pumpAndSettle();
+    block.reminder = Reminder(at: DateTime.now().subtract(const Duration(seconds: 1)));
+    await tester.pump(const Duration(seconds: 11));
+    await tester.pumpAndSettle();
+    expect(find.text('Reminder'), findsOneWidget);
+    expect((alarms as QuietAlarms).rung, hasLength(1));
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    expect(store.section.name, 'Finances');
+    expect(block.reminder!.rang, isTrue);
+
+    // It rings only once.
+    await tester.pump(const Duration(seconds: 11));
+    await tester.pumpAndSettle();
+    expect(find.text('Reminder'), findsNothing);
+  });
+
+  testWidgets("the calendar can show the phone's own events", (tester) async {
+    final store = await pumpApp(tester, const Size(390, 844));
+    final now = DateTime.now();
+    (phoneCalendar as FakePhoneCalendar).onPhone.add(
+      PhoneEvent(
+        title: 'Dentist',
+        start: DateTime(now.year, now.month, now.day, 15),
+        end: DateTime(now.year, now.month, now.day, 16),
+        allDay: false,
+      ),
+    );
+    await showCalendarFrom(tester);
+    expect(find.text('Dentist'), findsNothing);
+    await tester.tap(find.text("Show my phone's calendar"));
+    await tester.pumpAndSettle();
+    expect(store.notebook.showPhoneCalendar, isTrue);
+    expect(find.text('Dentist'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+Future<void> showCalendarFrom(WidgetTester tester) async {
+  final context = tester.element(find.byType(Scaffold).first);
+  showCalendar(context);
+  await tester.pumpAndSettle();
 }
 
 class _FakeDeviceUnlock implements DeviceUnlock {
@@ -426,4 +560,29 @@ class _FakeDeviceUnlock implements DeviceUnlock {
     asked++;
     return true;
   }
+}
+
+class FakePhoneCalendar implements PhoneCalendar {
+  final added = <String, (String, DateTime)>{};
+  final onPhone = <PhoneEvent>[];
+  var _next = 0;
+
+  @override
+  bool get available => true;
+
+  @override
+  Future<bool> askPermission() async => true;
+
+  @override
+  Future<List<PhoneEvent>> events(DateTime from, DateTime to) async => onPhone;
+
+  @override
+  Future<String?> add(String title, DateTime at, String note) async {
+    final id = 'event-${_next++}';
+    added[id] = (title, at);
+    return id;
+  }
+
+  @override
+  Future<void> remove(String id) async => added.remove(id);
 }
